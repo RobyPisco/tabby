@@ -19,6 +19,7 @@ export type Note = {
 };
 
 export type Folder = { id: number; name: string; count: number };
+export type FolderCounts = { all: number; unfiled: number };
 export type TagCount = { tag: string; count: number };
 export type NoteRef = { id: number; title: string };
 export type Version = { id: number; title: string; body: string; saved_at: number };

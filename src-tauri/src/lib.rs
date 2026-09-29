@@ -10,7 +10,7 @@ mod toast;
 mod tray;
 
 use db::{Db, Filter, Note};
-use organize::{Folder, NoteRef, TagCount, Version};
+use organize::{Folder, FolderCounts, NoteRef, TagCount, Version};
 use reminders::Scheduler;
 use serde::Serialize;
 use settings::{Settings, SettingsState};
@@ -74,6 +74,11 @@ fn set_pinned(window: WebviewWindow, db: State<Db>, id: i64, pinned: bool) -> Re
 #[tauri::command]
 fn list_folders(db: State<Db>) -> Result<Vec<Folder>, String> {
     db.list_folders().map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn folder_counts(db: State<Db>) -> Result<FolderCounts, String> {
+    db.folder_counts().map_err(|e| e.to_string())
 }
 
 fn folder_name(name: &str) -> Result<&str, String> {
@@ -438,6 +443,7 @@ pub fn run() {
             reminder_action,
             set_pinned,
             list_folders,
+            folder_counts,
             create_folder,
             rename_folder,
             delete_folder,

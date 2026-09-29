@@ -1,11 +1,12 @@
 <script lang="ts">
   import { invoke } from "@tauri-apps/api/core";
   import { tick } from "svelte";
-  import type { Folder, TagCount } from "$lib/notes";
+  import type { Folder, FolderCounts, TagCount } from "$lib/notes";
 
   /** `folder`: null = tutte, 0 = senza cartella, altrimenti l'id. */
   let {
     folders,
+    counts,
     tags,
     folder = $bindable(),
     tag = $bindable(),
@@ -16,6 +17,7 @@
     onsettings,
   }: {
     folders: Folder[];
+    counts: FolderCounts;
     tags: TagCount[];
     folder: number | null;
     tag: string | null;
@@ -32,6 +34,17 @@
   let error = $state("");
   let confirmDeleteId = $state<number | null>(null);
   let input = $state<HTMLInputElement>();
+
+  /** "Senza cartella" è un filtro: serve solo se esistono cartelle e qualche nota ne è fuori. */
+  const showUnfiled = $derived(folders.length > 0 && counts.unfiled > 0);
+
+  // Se il filtro sparisce mentre è selezionato, si torna a tutte le note.
+  $effect(() => {
+    if (folder === 0 && !showUnfiled) {
+      folder = null;
+      onselect();
+    }
+  });
 
   function pickFolder(value: number | null) {
     folder = value;
@@ -115,14 +128,23 @@
   <ul>
     <li>
       <button class="item" class:on={folder === null} onclick={() => pickFolder(null)}>
-        <span class="name">Tutte le cartelle</span>
+        <span class="name">Tutte le note</span>
+        <span class="count">{counts.all}</span>
       </button>
     </li>
-    <li>
-      <button class="item" class:on={folder === 0} onclick={() => pickFolder(0)}>
-        <span class="name">Senza cartella</span>
-      </button>
-    </li>
+    {#if showUnfiled}
+      <li>
+        <button
+          class="item"
+          class:on={folder === 0}
+          onclick={() => pickFolder(0)}
+          title="Le note che non hai messo in nessuna cartella"
+        >
+          <span class="name">Senza cartella</span>
+          <span class="count">{counts.unfiled}</span>
+        </button>
+      </li>
+    {/if}
     {#each folders as f (f.id)}
       {#if editing === f.id}
         {@render editField()}

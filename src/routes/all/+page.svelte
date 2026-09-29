@@ -25,6 +25,7 @@
     vivid,
     type Filter,
     type Folder,
+    type FolderCounts,
     type Note,
     type NoteRef,
     type ReminderAction,
@@ -49,6 +50,7 @@
   let selectedId = $state<number | null>(null);
   let checked = $state<number[]>([]);
   let folders = $state<Folder[]>([]);
+  let counts = $state<FolderCounts>({ all: 0, unfiled: 0 });
   let tags = $state<TagCount[]>([]);
   /** null = tutte le cartelle, 0 = senza cartella, altrimenti l'id. */
   let folder = $state<number | null>(null);
@@ -79,13 +81,15 @@
 
   async function reload() {
     await flushSave();
-    const [list, folderList, tagList] = await Promise.all([
+    const [list, folderList, folderCounts, tagList] = await Promise.all([
       invoke<Note[]>("search_notes", { query, filter, folder, tag }),
       invoke<Folder[]>("list_folders"),
+      invoke<FolderCounts>("folder_counts"),
       invoke<TagCount[]>("list_tags"),
     ]);
     notes = list;
     folders = folderList;
+    counts = folderCounts;
     tags = tagList;
     refreshKey++;
     checked = checked.filter((id) => notes.some((n) => n.id === id));
@@ -458,6 +462,7 @@
 <div class="app" class:dark>
   <Sidebar
     {folders}
+    {counts}
     {tags}
     bind:folder
     bind:tag

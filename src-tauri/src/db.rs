@@ -526,6 +526,8 @@ mod tests {
 
         let folder = db.create_folder("Progetti").unwrap();
         db.set_folder(&[home.id], Some(folder)).unwrap();
+        let counts = db.folder_counts().unwrap();
+        assert_eq!((counts.all, counts.unfiled), (4, 3)); // 2 note di benvenuto + 2 create
         assert_eq!(ids(&db.search("", Filter::All, Some(folder), None).unwrap()), vec![home.id]);
         assert!(!ids(&db.search("", Filter::All, Some(0), None).unwrap()).contains(&home.id));
         db.delete_folder(folder).unwrap();

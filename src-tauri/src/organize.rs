@@ -19,6 +19,13 @@ pub struct Folder {
     pub count: i64,
 }
 
+/// Note non nel cestino in totale e fuori da ogni cartella.
+#[derive(Serialize)]
+pub struct FolderCounts {
+    pub all: i64,
+    pub unfiled: i64,
+}
+
 #[derive(Serialize)]
 pub struct TagCount {
     pub tag: String,
@@ -184,6 +191,20 @@ impl Db {
             })
         })?;
         rows.collect()
+    }
+
+    pub fn folder_counts(&self) -> rusqlite::Result<FolderCounts> {
+        let conn = self.0.lock().unwrap();
+        conn.query_row(
+            "SELECT COUNT(*), COALESCE(SUM(folder_id IS NULL), 0) FROM notes WHERE deleted_at IS NULL",
+            [],
+            |r| {
+                Ok(FolderCounts {
+                    all: r.get(0)?,
+                    unfiled: r.get(1)?,
+                })
+            },
+        )
     }
 
     pub fn create_folder(&self, name: &str) -> rusqlite::Result<i64> {
