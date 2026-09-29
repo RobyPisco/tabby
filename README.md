@@ -53,7 +53,7 @@ npm run tauri build    # installer in src-tauri\target\release\bundle\ (nsis e m
 
 In sviluppo le notifiche appaiono come "Windows PowerShell": l'app non è registrata in Windows finché non è installata. Versione di sviluppo e versione installata condividono dati e "istanza unica": non vanno tenute aperte insieme.
 
-L'icona si rigenera con `scripts\genera-icona.ps1` e poi `npx tauri icon app-icon.png`.
+L'icona (il gatto tigrato) si rigenera con `scripts\genera-icona.ps1` e poi `npx tauri icon app-icon.png`; le immagini dell'installer con `scripts\genera-immagini-installer.ps1`.
 
 ## Struttura
 

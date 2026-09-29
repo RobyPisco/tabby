@@ -75,7 +75,9 @@
         "customLanguageFiles": {
           "Italian": "nsis/Italian.nsh"
         },
-        "installerIcon": "icons/icon.ico"
+        "installerIcon": "icons/icon.ico",
+        "sidebarImage": "nsis/sidebar.bmp",
+        "headerImage": "nsis/header.bmp"
       },
       "wix": {
         "language": "it-IT"
