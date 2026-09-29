@@ -1,0 +1,17 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "Capability for the dock and the \"Tutte le note\" window",
+  "windows": [
+    "main",
+    "all"
+  ],
+  "permissions": [
+    "core:default",
+    "core:window:allow-set-ignore-cursor-events",
+    "core:window:allow-hide",
+    "opener:default",
+    "core:window:allow-set-theme",
+    "dialog:default"
+  ]
+}
