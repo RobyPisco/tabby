@@ -6,7 +6,10 @@ use std::{thread, time::Duration};
 use tauri::{Emitter, LogicalPosition, LogicalSize, Manager, Monitor, WebviewWindow};
 use windows_sys::Win32::{
     Graphics::Gdi::{GetMonitorInfoW, MonitorFromWindow, MONITORINFO, MONITOR_DEFAULTTONEAREST},
-    UI::WindowsAndMessaging::{GetClassNameW, GetForegroundWindow, GetWindowRect},
+    UI::WindowsAndMessaging::{
+        GetClassNameW, GetForegroundWindow, GetWindowLongW, GetWindowRect, SetWindowPos, GWL_STYLE, HWND_BOTTOM,
+        SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE, WS_CAPTION,
+    },
 };
 
 use crate::settings::{Settings, SettingsState};
@@ -47,7 +50,9 @@ fn target_monitor(window: &WebviewWindow, settings: &Settings) -> Option<Monitor
     window.primary_monitor().ok().flatten()
 }
 
-/// La finestra in primo piano copre tutto il suo monitor (gioco, video, presentazione)?
+/// La finestra in primo piano è a tutto schermo (gioco, video, presentazione)?
+/// Vale se copre tutto il monitor, oppure se copre l'area di lavoro ed è senza barra del
+/// titolo (i giochi "in finestra senza bordi" lasciano visibile la barra delle applicazioni).
 /// Desktop e barra delle applicazioni non contano: coprono lo schermo ma sono la shell.
 fn foreground_is_fullscreen() -> bool {
     // SAFETY: chiamate Win32 di sola lettura su strutture locali inizializzate.
@@ -72,8 +77,11 @@ fn foreground_is_fullscreen() -> bool {
         if GetMonitorInfoW(monitor, &mut info) == 0 {
             return false;
         }
-        let m = info.rcMonitor;
-        rect.left <= m.left && rect.top <= m.top && rect.right >= m.right && rect.bottom >= m.bottom
+        let covers = |m: windows_sys::Win32::Foundation::RECT| {
+            rect.left <= m.left && rect.top <= m.top && rect.right >= m.right && rect.bottom >= m.bottom
+        };
+        let borderless = GetWindowLongW(hwnd, GWL_STYLE) as u32 & WS_CAPTION != WS_CAPTION;
+        covers(info.rcMonitor) || (borderless && covers(info.rcWork))
     }
 }
 
@@ -128,6 +136,15 @@ pub fn spawn_cursor_poller(window: WebviewWindow) {
                 let want_top = !foreground_is_fullscreen();
                 if want_top != on_top && window.set_always_on_top(want_top).is_ok() {
                     on_top = want_top;
+                    if !want_top {
+                        // Senza "sempre in primo piano" resterebbe comunque sopra alle finestre normali.
+                        if let Ok(hwnd) = window.hwnd() {
+                            // SAFETY: l'handle appartiene alla nostra finestra, ancora viva.
+                            unsafe {
+                                SetWindowPos(hwnd.0 as _, HWND_BOTTOM, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+                            }
+                        }
+                    }
                 }
             }
             if tick % MONITOR_CHECK_EVERY == 0 {
