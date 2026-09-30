@@ -62,7 +62,7 @@ Dettagli di progetto e motivazioni in [`PIANO.md`](PIANO.md).
 - [x] Impostazioni (colonna di "Tutte le note" o menu della tray): bordo destro/sinistro, larghezza della nota, schermo, carattere e dimensione del testo, colore delle note nuove, suono delle notifiche, tema chiaro/scuro/automatico, avvio con Windows. Salvate in `settings.json`.
 
 ## 7. Rifinitura e rilascio
-- [x] Icona definitiva (`app-icon.png`, disegnata da `scripts/genera-icona.ps1`), versione 1.0.0, descrizione e installer in italiano.
+- [x] Icona definitiva (`assets/app-icon.png`), versione 1.0.0, descrizione e installer in italiano.
 - [x] Build installer (`npm run tauri build` → `bundle\nsis\…-setup.exe` e `bundle\msi\…_it-IT.msi`) e prova su questo portatile (installata per l'utente il 2026-09-29).
 - [ ] Prova sul portatile di casa.
 - [x] Test: `cargo test` (strato dati, promemoria e ricorrenze, tag, link, export, impostazioni, cattura) e `npm test` (date a parole).

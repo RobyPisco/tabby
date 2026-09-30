@@ -90,7 +90,10 @@ pub fn create(app: &AppHandle) -> tauri::Result<()> {
                 toggle_all_notes(tray.app_handle());
             }
         });
-    if let Some(icon) = app.default_window_icon() {
+    // Versione pensata per le dimensioni piccole dell'area di notifica.
+    if let Ok(icon) = tauri::image::Image::from_bytes(include_bytes!("../icons/tray.png")) {
+        builder = builder.icon(icon);
+    } else if let Some(icon) = app.default_window_icon() {
         builder = builder.icon(icon.clone());
     }
     builder.build(app)?;
