@@ -22,12 +22,13 @@
 
   type Phase = "rest" | "fan" | "open";
 
-  const TAB_WIDTH = 32; // larghezza della linguetta sul bordo destro
-  const TAB_HEIGHT = 92; // altezza massima; con molte note le linguette si accorciano
-  const TAB_MIN_HEIGHT = 36;
-  const TAB_GAP = -10; // sovrapposizione "a scandole"
+  const TAB_WIDTH = 172; // spazio occupato dalle schede sul bordo (scheda + margine)
+  const TAB_HEIGHT = 40; // altezza massima; con molte note le schede si accorciano
+  const TAB_MIN_HEIGHT = 24;
+  const TAB_GAP = 8;
   const STAGGER_MS = 45;
   const TRIGGER_WIDTH = 32; // fascia di bordo che risveglia il deck
+  const GLASS_ALPHA = { clear: 0.15, dense: 0.85 }; // opacità del vetro a 100% e a 0% di trasparenza
   const LEAVE_DELAY_MS = 350;
   const SAVE_DEBOUNCE_MS = 250;
 
@@ -65,6 +66,9 @@
   const noteW = $derived(settings.note_width);
   const noteH = $derived(Math.min(settings.note_width, Math.max(winHeight - 40, 200)));
   const left = $derived(settings.side === "left");
+  const glassAlpha = $derived(
+    GLASS_ALPHA.dense - (settings.deck_transparency / 100) * (GLASS_ALPHA.dense - GLASS_ALPHA.clear),
+  );
   const noteTop = $derived.by(() => {
     const top = Math.max((winHeight - deckHeight) / 2, 8) - 20;
     return Math.max(12, Math.min(top, winHeight - noteH - 12));
@@ -92,7 +96,7 @@
     const top = noteOpen ? Math.min(deckTop - 24, noteTop) : deckTop - 24;
     const bottom = Math.max(deckTop + deckHeight + 72, noteOpen ? noteTop + noteH + 12 : 0); // + e ☰ compresi
     if (y < top || y > bottom) return false;
-    const deckLeft = dockW - (phase === "rest" ? TRIGGER_WIDTH : TAB_WIDTH + 12);
+    const deckLeft = dockW - (phase === "rest" ? TRIGGER_WIDTH : TAB_WIDTH);
     return x >= (noteOpen ? dockW - TAB_WIDTH - noteW - 12 : deckLeft);
   }
 
@@ -323,13 +327,14 @@
   style:--seg-h="{pillSegHeight}px"
   style:--note-w="{noteW}px"
   style:--note-h="{noteH}px"
+  style:--glass={glassAlpha}
   ondragover={onDragOver}
   ondrop={onDrop}
 >
   <!-- Pillola a riposo -->
   <div class="pill" class:hidden={phase !== "rest"} style:top="{deckTop + deckHeight / 2}px">
     {#each notes as note (note.id)}
-      <span style:background={vivid(note.color)} class:due={isOverdue(note, clock.now)}></span>
+      <span style:--c={vivid(note.color)} class:due={isOverdue(note, clock.now)}></span>
     {/each}
   </div>
 
@@ -343,16 +348,17 @@
         class:due={isOverdue(note, clock.now)}
         class:has-bell={note.remind_at !== null}
         class:pinned={note.pinned}
-        style:background={note.color}
+        style:--c={vivid(note.color)}
         style:top="{i * (tabHeight + TAB_GAP)}px"
         style:transition-delay="{phase === "rest" ? 0 : i * STAGGER_MS}ms"
         onclick={() => openNoteById(note.id)}
         aria-label={note.title || "Senza titolo"}
       >
+        <span class="dot"></span>
+        <span class="label">{note.title || "Senza titolo"}</span>
         {#if note.pinned}
           <svg class="tab-pin" viewBox="0 0 20 20" aria-hidden="true"><path d="M7.5 2.5h5l-.8 4.2 2.8 2.8v1.5H5.5V9.5l2.8-2.8-.8-4.2ZM10 11v6.5" /></svg>
         {/if}
-        <span class="label">{note.title || "Senza titolo"}</span>
         {#if note.remind_at !== null}
           <svg class="tab-bell" viewBox="0 0 20 20" aria-hidden="true">
             <path d="M10 2.5a5 5 0 0 0-5 5v3.2L3.6 13.5h12.8L15 10.7V7.5a5 5 0 0 0-5-5Zm-2 13a2 2 0 0 0 4 0Z" />
@@ -363,14 +369,14 @@
     <button
       class="add"
       class:shown={phase !== "rest"}
-      style:top="{deckHeight + 14}px"
+      style:top="{deckHeight + 12}px"
       onclick={() => addNote()}
       aria-label="Nuova nota"
     >+</button>
     <button
       class="add all"
       class:shown={phase !== "rest"}
-      style:top="{deckHeight + 42}px"
+      style:top="{deckHeight + 44}px"
       onclick={() => invoke("show_all_notes")}
       aria-label="Tutte le note"
       title="Tutte le note (Ctrl+Alt+L)"
@@ -453,19 +459,14 @@
     user-select: none;
   }
 
+  /* A riposo: sottili barre di luce sul bordo, una per nota. */
   .pill {
     position: absolute;
-    right: 4px;
-    width: 20px;
-    padding: 7px 0;
+    right: 5px;
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 5px;
-    border-radius: 10px;
-    background: rgba(30, 30, 40, 0.7);
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
-    backdrop-filter: blur(6px);
+    gap: 6px;
     transform: translateY(-50%);
     transition: opacity 0.2s;
   }
@@ -473,18 +474,22 @@
     opacity: 0;
   }
   .pill span {
-    width: 12px;
+    width: 6px;
     height: var(--seg-h);
-    border-radius: 6px;
+    border-radius: 4px;
+    background: var(--c);
+    box-shadow:
+      0 0 0 1px rgba(255, 255, 255, 0.35),
+      0 0 10px color-mix(in srgb, var(--c) 70%, transparent);
   }
-  /* Promemoria scaduto: il trattino lampeggia di rosso. */
+  /* Promemoria scaduto: la barra lampeggia di rosso. */
   .pill span.due {
     animation: due-blink 1.2s ease-in-out infinite;
   }
   @keyframes due-blink {
     50% {
       background: #ff3b2f;
-      box-shadow: 0 0 8px #ff3b2f;
+      box-shadow: 0 0 10px #ff3b2f;
     }
   }
 
@@ -494,28 +499,48 @@
     width: var(--tab-w);
   }
 
+  /* Schede di vetro: fondo scuro semitrasparente, così il testo si legge su qualsiasi sfondo. */
+  .tab,
+  .add {
+    border: 1px solid rgba(255, 255, 255, 0.22);
+    background: rgba(24, 27, 36, var(--glass));
+    backdrop-filter: blur(14px) saturate(1.4);
+    box-shadow:
+      0 4px 14px rgba(0, 0, 0, 0.25),
+      inset 0 1px 0 rgba(255, 255, 255, 0.18);
+    color: #fff;
+    cursor: pointer;
+  }
   .tab {
     position: absolute;
-    right: 0;
-    width: var(--tab-w);
+    right: 8px;
+    width: 150px;
     height: var(--tab-h);
-    border: 0;
-    padding: 0;
-    border-radius: 12px 0 0 12px;
-    box-shadow: -2px 3px 10px rgba(0, 0, 0, 0.25);
-    cursor: pointer;
-    transform: translateX(100%);
+    box-sizing: border-box;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 0 12px;
+    border-radius: 14px;
+    text-align: left;
+    transform: translateX(calc(100% + 16px));
     opacity: 0;
     transition:
       transform 0.28s cubic-bezier(0.2, 0.9, 0.3, 1.1),
+      width 0.2s,
       opacity 0.2s;
   }
   .tab.shown {
     transform: translateX(0);
     opacity: 1;
   }
+  .tab:hover,
   .tab.active {
-    transform: translateX(-4px);
+    width: 164px;
+    border-color: rgba(255, 255, 255, 0.4);
+  }
+  .tab.active {
+    background: rgba(24, 27, 36, min(1, calc(var(--glass) + 0.2)));
   }
   .tab.due {
     animation: due-glow 1.2s ease-in-out infinite;
@@ -523,72 +548,58 @@
   @keyframes due-glow {
     50% {
       box-shadow:
-        -2px 3px 10px rgba(0, 0, 0, 0.25),
-        0 0 0 3px #ff3b2f;
+        0 4px 14px rgba(0, 0, 0, 0.25),
+        0 0 0 2px #ff3b2f;
     }
   }
-  .tab-bell {
-    position: absolute;
-    left: 50%;
-    bottom: 12px;
-    width: 12px;
-    height: 12px;
-    translate: -50% 0;
-    fill: rgba(0, 0, 0, 0.55);
-  }
-  .tab-pin {
-    position: absolute;
-    left: 50%;
-    top: 10px;
-    width: 12px;
-    height: 12px;
-    translate: -50% 0;
-    fill: none;
-    stroke: rgba(0, 0, 0, 0.6);
-    stroke-width: 1.8;
-    stroke-linejoin: round;
-  }
-  .tab.pinned .label {
-    max-height: calc(var(--tab-h) - 40px);
-    margin-top: 14px;
-  }
-  .tab.pinned.has-bell .label {
-    max-height: calc(var(--tab-h) - 64px);
-  }
-  .tab.has-bell .label {
-    max-height: calc(var(--tab-h) - 40px);
-    margin-bottom: 14px;
-  }
-  .tab.due .tab-bell {
-    fill: #d93b2b;
+  .dot {
+    flex: none;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: var(--c);
+    box-shadow:
+      0 0 0 3px color-mix(in srgb, var(--c) 30%, transparent),
+      0 0 10px var(--c);
   }
   .label {
-    display: block;
-    writing-mode: vertical-rl;
-    font-size: 11px;
-    font-weight: 700;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    color: rgba(0, 0, 0, 0.55);
-    margin: 0 auto;
-    max-height: calc(var(--tab-h) - 16px);
+    flex: 1;
+    min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+    font-size: 13px;
+    font-weight: 500;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.55);
+  }
+  .tab-pin,
+  .tab-bell {
+    flex: none;
+    width: 13px;
+    height: 13px;
+  }
+  .tab-pin {
+    fill: none;
+    stroke: rgba(255, 255, 255, 0.75);
+    stroke-width: 1.8;
+    stroke-linejoin: round;
+  }
+  .tab-bell {
+    fill: rgba(255, 255, 255, 0.75);
+  }
+  .tab.due .tab-bell {
+    fill: #ff6b5e;
   }
 
   .add {
     position: absolute;
-    right: 6px;
-    width: 22px;
-    height: 22px;
-    border: 0;
+    right: 8px;
+    width: 26px;
+    height: 26px;
+    padding: 0;
     border-radius: 50%;
-    background: rgba(255, 255, 255, 0.9);
-    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
-    font-size: 15px;
+    font-size: 16px;
     line-height: 1;
-    cursor: pointer;
     opacity: 0;
     transition: opacity 0.2s 0.2s;
   }
@@ -604,8 +615,13 @@
     transform: scaleX(-1);
   }
   .stage.left .label,
+  .stage.left .tab svg,
+  .stage.left .add,
   .stage.left .note-wrap {
     transform: scaleX(-1);
+  }
+  .stage.left .tab {
+    flex-direction: row-reverse;
   }
   .note-wrap {
     position: absolute;

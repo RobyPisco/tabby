@@ -92,6 +92,17 @@
         onchange={(e) => update({ note_width: Number(e.currentTarget.value) })}
       />
     </label>
+    <label class="row">
+      <span>Trasparenza delle schede <small>{settings.deck_transparency}%</small></span>
+      <input
+        type="range"
+        min="0"
+        max="100"
+        step="5"
+        value={settings.deck_transparency}
+        onchange={(e) => update({ deck_transparency: Number(e.currentTarget.value) })}
+      />
+    </label>
     {#if monitors.length > 1}
       <label class="row">
         <span>Schermo</span>

@@ -8,6 +8,7 @@ pub const COLORS: [&str; 6] = ["#b5d3f7", "#b3e5cf", "#d4c8f2", "#f7dc82", "#f7c
 
 const NOTE_WIDTH_RANGE: (u32, u32) = (280, 520);
 const EDITOR_SIZE_RANGE: (u32, u32) = (13, 24);
+const DECK_TRANSPARENCY_MAX: u32 = 100;
 
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(default)]
@@ -27,6 +28,8 @@ pub struct Settings {
     pub sound: bool,
     /// Tema di "Tutte le note": "auto", "light" o "dark".
     pub theme: String,
+    /// Trasparenza del vetro delle schede nel deck, da 0 (opaco) a 100.
+    pub deck_transparency: u32,
 }
 
 impl Default for Settings {
@@ -40,6 +43,7 @@ impl Default for Settings {
             new_note_color: "cycle".into(),
             sound: true,
             theme: "auto".into(),
+            deck_transparency: 45,
         }
     }
 }
@@ -69,13 +73,14 @@ impl Settings {
             },
             sound: self.sound,
             theme: one_of(self.theme, &["auto", "light", "dark"], &default.theme),
+            deck_transparency: self.deck_transparency.min(DECK_TRANSPARENCY_MAX),
         }
     }
 
-    /// Larghezza della finestra del deck: nota + linguette + margini.
+    /// Larghezza della finestra del deck: nota + schede + margini.
     /// Deve restare uguale a `dockWidth` in `src/lib/settings.svelte.ts`.
     pub fn dock_width(&self) -> f64 {
-        f64::from(self.note_width) + 120.0
+        f64::from(self.note_width) + 200.0
     }
 
     /// Colore per una nota nuova, dato il numero di note già nel deck.
@@ -131,6 +136,7 @@ mod tests {
             note_width: 9999,
             editor_font: "comic".into(),
             new_note_color: "#000000".into(),
+            deck_transparency: 500,
             ..Settings::default()
         }
         .sanitized();
@@ -138,6 +144,7 @@ mod tests {
         assert_eq!(s.note_width, 520);
         assert_eq!(s.editor_font, "hand");
         assert_eq!(s.new_note_color, "cycle");
+        assert_eq!(s.deck_transparency, 100);
     }
 
     #[test]

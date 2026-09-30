@@ -12,6 +12,8 @@ export type Settings = {
   new_note_color: string;
   sound: boolean;
   theme: "auto" | "light" | "dark";
+  /** Trasparenza del vetro delle schede nel deck, 0-100. */
+  deck_transparency: number;
 };
 
 export const FONTS: Record<Settings["editor_font"], { label: string; css: string }> = {
@@ -30,11 +32,12 @@ export const settings = $state<Settings>({
   new_note_color: "cycle",
   sound: true,
   theme: "auto",
+  deck_transparency: 45,
 });
 
 /** Larghezza della finestra del deck: deve restare uguale a `dock_width` in settings.rs. */
 export function dockWidth(s: Settings = settings): number {
-  return s.note_width + 120;
+  return s.note_width + 200;
 }
 
 export function colorForNewNote(existing: number): string {
