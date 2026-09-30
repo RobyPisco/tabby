@@ -2,7 +2,7 @@
 name = "tabby"
 version = "1.0.0"
 description = "Tabby: sticky notes ancorate al bordo dello schermo"
-authors = ["RobyPisco"]
+authors = ["Roberto Pisco Pisconti"]
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html

@@ -1,5 +1,6 @@
 <script lang="ts">
   import { invoke } from "@tauri-apps/api/core";
+  import { getVersion } from "@tauri-apps/api/app";
   import { listen } from "@tauri-apps/api/event";
   import { onMount } from "svelte";
   import { COLOR_NAMES, COLORS, vivid } from "$lib/notes";
@@ -10,6 +11,7 @@
   type MonitorInfo = { name: string; label: string };
   let monitors = $state<MonitorInfo[]>([]);
   let autostart = $state(false);
+  let version = $state("");
   let error = $state("");
   let dialog = $state<HTMLElement>();
 
@@ -40,6 +42,7 @@
   }
 
   onMount(() => {
+    getVersion().then((v) => (version = v)).catch(() => {});
     invoke<MonitorInfo[]>("list_monitors").then((list) => (monitors = list));
     invoke<boolean>("get_autostart").then((value) => (autostart = value));
     dialog?.focus();
@@ -196,6 +199,12 @@
       <span>Note, immagini e impostazioni sono salvate sul PC.</span>
       <button class="plain" onclick={() => invoke("open_data_folder")}>Apri la cartella</button>
     </div>
+
+    <h3>Informazioni</h3>
+    <p class="about">
+      <strong>Tabby</strong>{version ? ` ${version}` : ""}<br />
+      Creato da <strong>Roberto Pisco Pisconti</strong>
+    </p>
   </div>
 </div>
 
@@ -369,6 +378,10 @@
   }
   .plain:hover {
     background: var(--hover);
+  }
+  .about {
+    margin: 4px 0 0;
+    line-height: 1.5;
   }
   .hint {
     margin: 6px 0 0;

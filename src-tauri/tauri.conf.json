@@ -61,7 +61,8 @@
       "icons/128x128@2x.png",
       "icons/icon.ico"
     ],
-    "publisher": "RobyPisco",
+    "publisher": "Roberto Pisco Pisconti",
+    "copyright": "© 2026 Roberto Pisco Pisconti",
     "category": "Productivity",
     "shortDescription": "Sticky notes ancorate al bordo dello schermo",
     "longDescription": "Note adesive sul bordo dello schermo: ricerca, promemoria con notifiche, caselle da spuntare, immagini, tag, cartelle, link tra note ed export.",
