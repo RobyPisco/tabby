@@ -4,11 +4,17 @@
 use serde::Serialize;
 use std::{thread, time::Duration};
 use tauri::{Emitter, LogicalPosition, LogicalSize, Manager, Monitor, WebviewWindow};
+use windows_sys::Win32::{
+    Graphics::Gdi::{GetMonitorInfoW, MonitorFromWindow, MONITORINFO, MONITOR_DEFAULTTONEAREST},
+    UI::WindowsAndMessaging::{GetClassNameW, GetForegroundWindow, GetWindowRect},
+};
 
 use crate::settings::{Settings, SettingsState};
 
 /// Ogni quanti giri del poller (~16 ms l'uno) si ricontrolla la geometria dello schermo.
 const MONITOR_CHECK_EVERY: u32 = 120;
+/// Ogni quanti giri si controlla se c'è un'app a tutto schermo (~0,5 s).
+const FULLSCREEN_CHECK_EVERY: u32 = 30;
 
 #[derive(Clone, Serialize)]
 struct CursorPayload {
@@ -39,6 +45,36 @@ fn target_monitor(window: &WebviewWindow, settings: &Settings) -> Option<Monitor
         }
     }
     window.primary_monitor().ok().flatten()
+}
+
+/// La finestra in primo piano copre tutto il suo monitor (gioco, video, presentazione)?
+/// Desktop e barra delle applicazioni non contano: coprono lo schermo ma sono la shell.
+fn foreground_is_fullscreen() -> bool {
+    // SAFETY: chiamate Win32 di sola lettura su strutture locali inizializzate.
+    unsafe {
+        let hwnd = GetForegroundWindow();
+        if hwnd.is_null() {
+            return false;
+        }
+        let mut class = [0u16; 64];
+        let len = GetClassNameW(hwnd, class.as_mut_ptr(), class.len() as i32).max(0) as usize;
+        let class = String::from_utf16_lossy(&class[..len]);
+        if matches!(class.as_str(), "Progman" | "WorkerW" | "Shell_TrayWnd" | "Shell_SecondaryTrayWnd") {
+            return false;
+        }
+        let mut rect = std::mem::zeroed();
+        if GetWindowRect(hwnd, &mut rect) == 0 {
+            return false;
+        }
+        let mut info: MONITORINFO = std::mem::zeroed();
+        info.cbSize = std::mem::size_of::<MONITORINFO>() as u32;
+        let monitor = MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST);
+        if GetMonitorInfoW(monitor, &mut info) == 0 {
+            return false;
+        }
+        let m = info.rcMonitor;
+        rect.left <= m.left && rect.top <= m.top && rect.right >= m.right && rect.bottom >= m.bottom
+    }
 }
 
 /// Ancora la finestra al bordo scelto, a tutta altezza della work area del monitor.
@@ -76,15 +112,24 @@ fn geometry(window: &WebviewWindow, settings: &Settings) -> Option<(i32, i32, u3
 
 /// Legge il cursore a ~60 Hz e lo inoltra al frontend: con la finestra click-through
 /// la webview non riceve eventi mouse, quindi la prossimità va rilevata da Rust.
-/// Ogni ~2 s controlla anche se lo schermo è cambiato (monitor staccato, risoluzione,
+/// Ogni ~0,5 s controlla se un'app a tutto schermo è in primo piano: in quel caso
+/// toglie al deck lo "sempre in primo piano". Ogni ~2 s controlla anche se lo schermo è cambiato (monitor staccato, risoluzione,
 /// scala, barra delle applicazioni spostata) e in quel caso riposiziona il deck.
 pub fn spawn_cursor_poller(window: WebviewWindow) {
     thread::spawn(move || {
         let mut last_geometry = None;
         let mut tick = 0u32;
+        let mut on_top = true;
         loop {
             thread::sleep(Duration::from_millis(16));
             tick = tick.wrapping_add(1);
+            // Con un'app a tutto schermo il deck smette di stare sopra a tutto.
+            if tick % FULLSCREEN_CHECK_EVERY == 0 {
+                let want_top = !foreground_is_fullscreen();
+                if want_top != on_top && window.set_always_on_top(want_top).is_ok() {
+                    on_top = want_top;
+                }
+            }
             if tick % MONITOR_CHECK_EVERY == 0 {
                 let settings = window.state::<SettingsState>().get();
                 let current = geometry(&window, &settings);
