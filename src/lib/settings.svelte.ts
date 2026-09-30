@@ -11,6 +11,7 @@ export type Settings = {
   editor_size: number;
   new_note_color: string;
   sound: boolean;
+  sound_name: string;
   theme: "auto" | "light" | "dark";
   /** Trasparenza del vetro delle schede nel deck, 0-100. */
   deck_transparency: number;
@@ -31,6 +32,7 @@ export const settings = $state<Settings>({
   editor_size: 18,
   new_note_color: "cycle",
   sound: true,
+  sound_name: "reminder",
   theme: "auto",
   deck_transparency: 45,
 });

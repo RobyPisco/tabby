@@ -6,6 +6,11 @@ use std::{path::PathBuf, sync::Mutex};
 /// Colori delle note (pastello); le stesse tinte di `COLORS` in `src/lib/notes.ts`.
 pub const COLORS: [&str; 6] = ["#b5d3f7", "#b3e5cf", "#d4c8f2", "#f7dc82", "#f7c4b5", "#f2b8d4"];
 
+/// Suoni disponibili per le notifiche (chiavi salvate nelle impostazioni).
+pub const SOUNDS: [&str; 9] = [
+    "reminder", "default", "im", "mail", "sms", "alarm", "alarm2", "call", "call2",
+];
+
 const NOTE_WIDTH_RANGE: (u32, u32) = (280, 520);
 const EDITOR_SIZE_RANGE: (u32, u32) = (13, 24);
 const DECK_TRANSPARENCY_MAX: u32 = 100;
@@ -26,6 +31,8 @@ pub struct Settings {
     pub new_note_color: String,
     /// Suono delle notifiche.
     pub sound: bool,
+    /// Quale suono: una delle chiavi di `SOUNDS`.
+    pub sound_name: String,
     /// Tema di "Tutte le note": "auto", "light" o "dark".
     pub theme: String,
     /// Trasparenza del vetro delle schede nel deck, da 0 (opaco) a 100.
@@ -42,6 +49,7 @@ impl Default for Settings {
             editor_size: 18,
             new_note_color: "cycle".into(),
             sound: true,
+            sound_name: "reminder".into(),
             theme: "auto".into(),
             deck_transparency: 45,
         }
@@ -72,6 +80,7 @@ impl Settings {
                 default.new_note_color
             },
             sound: self.sound,
+            sound_name: one_of(self.sound_name, &SOUNDS, &default.sound_name),
             theme: one_of(self.theme, &["auto", "light", "dark"], &default.theme),
             deck_transparency: self.deck_transparency.min(DECK_TRANSPARENCY_MAX),
         }

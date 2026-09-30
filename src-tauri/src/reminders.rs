@@ -11,7 +11,7 @@ use tauri_winrt_notification::{Scenario, Toast};
 
 use crate::db::{now, Db, DueReminder};
 use crate::notify_changed_from;
-use crate::toast::{app_id, sound};
+use crate::toast::{app_id, sound, with_icon};
 
 /// Anche senza scadenze vicine lo scheduler ricontrolla ogni tanto:
 /// copre il risveglio dalla sospensione e i cambi di ora del sistema.
@@ -88,21 +88,21 @@ fn show_toast(app: &AppHandle, reminder: &DueReminder) {
     let when = Local
         .timestamp_opt(reminder.due_at, 0)
         .single()
-        .map(|d| format!("Scadenza: {}", d.format("%d/%m %H:%M")))
+        .map(|d| format!("⏰ {}", friendly_when(d)))
         .unwrap_or_default();
 
     let handle = app.clone();
     let note_id = reminder.note_id;
-    let result = Toast::new(&app_id(app))
+    let result = with_icon(Toast::new(&app_id(app)))
         .title(title)
         .text1(&preview)
         .text2(&when)
         .scenario(Scenario::Reminder)
         .sound(sound(app))
-        .add_button("10 min", "snooze10")
-        .add_button("1 ora", "snooze60")
-        .add_button("Domani", "tomorrow")
-        .add_button("Fatto", "done")
+        .add_button("⏱ 10 min", "snooze10")
+        .add_button("🕐 1 ora", "snooze60")
+        .add_button("🌅 Domani", "tomorrow")
+        .add_button("✓ Fatto", "done")
         .on_activated(move |action| {
             // Clic sul corpo della notifica: nessuna azione, si apre la nota.
             apply_action(&handle, note_id, action.as_deref().unwrap_or("open"));
@@ -114,9 +114,21 @@ fn show_toast(app: &AppHandle, reminder: &DueReminder) {
     }
 }
 
+/// "oggi alle 13:08", "ieri alle 09:00", "30/09 alle 13:08".
+fn friendly_when(due: chrono::DateTime<Local>) -> String {
+    let today = Local::now().date_naive();
+    let time = due.format("%H:%M");
+    match (due.date_naive() - today).num_days() {
+        0 => format!("oggi alle {time}"),
+        -1 => format!("ieri alle {time}"),
+        1 => format!("domani alle {time}"),
+        _ => format!("{} alle {time}", due.format("%d/%m")),
+    }
+}
+
 fn show_summary_toast(app: &AppHandle, count: usize) {
     let handle = app.clone();
-    let result = Toast::new(&app_id(app))
+    let result = with_icon(Toast::new(&app_id(app)))
         .title(&format!("{count} promemoria scaduti"))
         .text1("Aprili da \"Tutte le note\" o dal deck.")
         .sound(sound(app))

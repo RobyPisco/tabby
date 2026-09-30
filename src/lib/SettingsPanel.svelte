@@ -15,6 +15,18 @@
   let error = $state("");
   let dialog = $state<HTMLElement>();
 
+  const SOUNDS: [string, string][] = [
+    ["reminder", "Promemoria"],
+    ["default", "Classico"],
+    ["im", "Messaggio"],
+    ["mail", "Posta"],
+    ["sms", "SMS"],
+    ["alarm", "Sveglia"],
+    ["alarm2", "Sveglia 2"],
+    ["call", "Chiamata"],
+    ["call2", "Chiamata 2"],
+  ];
+
   const SHORTCUTS: [string, string][] = [
     ["Ctrl+Alt+L", "Tutte le note"],
     ["Ctrl+Alt+N", "Nuova nota nel deck"],
@@ -178,6 +190,19 @@
       <span>Suono delle notifiche</span>
       <input type="checkbox" checked={settings.sound} onchange={(e) => update({ sound: e.currentTarget.checked })} />
     </label>
+    {#if settings.sound}
+      <div class="row">
+        <span>Quale suono</span>
+        <div class="sound-pick">
+          <select value={settings.sound_name} onchange={(e) => update({ sound_name: e.currentTarget.value })}>
+            {#each SOUNDS as [key, label] (key)}
+              <option value={key}>{label}</option>
+            {/each}
+          </select>
+          <button class="plain" onclick={() => invoke("preview_sound", { name: settings.sound_name })}>▶ Prova</button>
+        </div>
+      </div>
+    {/if}
     <label class="row check">
       <span>Avvia con Windows</span>
       <input type="checkbox" checked={autostart} onchange={toggleAutostart} />
@@ -304,6 +329,11 @@
     width: 18px;
     height: 18px;
     accent-color: var(--focus);
+  }
+  .sound-pick {
+    display: flex;
+    gap: 8px;
+    align-items: center;
   }
   .segmented {
     display: flex;

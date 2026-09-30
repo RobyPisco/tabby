@@ -287,6 +287,11 @@ fn set_settings(app: AppHandle, state: State<SettingsState>, settings: Settings)
     Ok(saved)
 }
 
+#[tauri::command]
+fn preview_sound(app: AppHandle, name: String) {
+    toast::preview(&app, &name);
+}
+
 /// Voce "Avvia con Windows" del menu della tray, da tenere allineata con le impostazioni.
 pub(crate) struct AutostartMenuItem(pub CheckMenuItem<Wry>);
 
@@ -473,6 +478,7 @@ pub fn run() {
             dock::list_monitors,
             get_settings,
             set_settings,
+            preview_sound,
             get_autostart,
             set_autostart,
             open_data_folder,
