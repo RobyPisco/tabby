@@ -311,11 +311,19 @@ pub(crate) fn set_autostart_enabled(app: &AppHandle, enabled: bool) -> Result<bo
     Ok(actual)
 }
 
+/// Cartella dei dati; `TABBY_DATA_DIR` la sposta (utile per prove e screenshot con note di esempio).
+pub(crate) fn data_dir(app: &AppHandle) -> Result<std::path::PathBuf, tauri::Error> {
+    match std::env::var_os("TABBY_DATA_DIR") {
+        Some(dir) => Ok(dir.into()),
+        None => app.path().app_data_dir(),
+    }
+}
+
 /// Apre in Esplora risorse la cartella con database, immagini e impostazioni.
 #[tauri::command]
 fn open_data_folder(app: AppHandle) -> Result<(), String> {
     use tauri_plugin_opener::OpenerExt;
-    let dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
+    let dir = data_dir(&app).map_err(|e| e.to_string())?;
     app.opener()
         .open_path(dir.to_string_lossy(), None::<&str>)
         .map_err(|e| e.to_string())
@@ -481,7 +489,7 @@ pub fn run() {
             }
         })
         .setup(|app| {
-            let data_dir = app.path().app_data_dir()?;
+            let data_dir = data_dir(app.handle())?;
             std::fs::create_dir_all(&data_dir)?;
             app.manage(Db::open(&data_dir.join("notes.db"))?);
             app.manage(SettingsState::load(data_dir.join("settings.json")));

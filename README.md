@@ -7,6 +7,20 @@ Creato da **Roberto Pisco Pisconti**.
 Stack: **Tauri 2 (Rust) + SvelteKit (Svelte 5) + SQLite (rusqlite) + CodeMirror 6**.
 Il piano è in [`docs/PIANO.md`](docs/PIANO.md); cosa è fatto e cosa resta in [`docs/TODO.md`](docs/TODO.md).
 
+![Il deck sul bordo dello schermo](docs/screenshots/deck.png)
+
+![Tutte le note: ricerca, cartelle, tag e editor](docs/screenshots/tutte-le-note.png)
+
+## Scarica
+
+Vai alla pagina delle [**Releases**](https://github.com/RobyPisco/tabby/releases/latest) e scarica `Tabby_*_x64-setup.exe` (oppure l'`.msi`). Serve Windows 10/11, non serve essere amministratori.
+
+L'installer non è ancora firmato: se Windows mostra "App non riconosciuta", scegli *Ulteriori informazioni* → *Esegui comunque*.
+
+## Licenza
+
+[MIT](LICENSE) © 2026 Roberto Pisco Pisconti.
+
 ## Cosa fa
 
 - **Deck sul bordo** destro o sinistro, sempre in primo piano e trasparente ai clic a riposo; note fissate in cima; si riposiziona da solo se cambiano monitor, risoluzione o scala.
@@ -33,7 +47,7 @@ Se un'altra app occupa già una scorciatoia globale, quella viene saltata senza 
 
 ## Dati
 
-Tutto resta sul PC, in `%APPDATA%\it.pisco.tabby\`: `notes.db` (SQLite), `media\` (immagini e allegati), `settings.json`. Dalle impostazioni c'è "Apri la cartella".
+Tutto resta sul PC, in `%APPDATA%\it.pisco.tabby\` (o nella cartella indicata da `TABBY_DATA_DIR`, utile per le prove): `notes.db` (SQLite), `media\` (immagini e allegati), `settings.json`. Dalle impostazioni c'è "Apri la cartella".
 
 ## Sviluppo (Windows 11)
 

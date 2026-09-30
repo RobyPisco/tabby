@@ -17,11 +17,7 @@ const MAX_BYTES: usize = 20 * 1024 * 1024;
 const MAX_ATTACHMENT_BYTES: usize = 100 * 1024 * 1024;
 
 pub fn media_dir(app: &AppHandle) -> Result<PathBuf, String> {
-    let dir = app
-        .path()
-        .app_data_dir()
-        .map_err(|e| e.to_string())?
-        .join("media");
+    let dir = crate::data_dir(app).map_err(|e| e.to_string())?.join("media");
     std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
     Ok(dir)
 }
