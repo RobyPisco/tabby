@@ -47,6 +47,7 @@ class ImageWidget extends WidgetType {
   constructor(
     readonly src: string,
     readonly alt: string,
+    readonly name: string | null,
   ) {
     super();
   }
@@ -59,7 +60,23 @@ class ImageWidget extends WidgetType {
     img.alt = this.alt;
     img.className = "cm-image";
     img.draggable = false;
+    img.title = "Clic per ingrandire";
+    // L'editor che contiene l'immagine ascolta questi eventi (vedi NoteEditor.svelte).
+    const notify = (kind: "open" | "menu", event: MouseEvent) => {
+      event.preventDefault();
+      img.dispatchEvent(
+        new CustomEvent("tabby-image", {
+          bubbles: true,
+          detail: { kind, src: this.src, name: this.name, x: event.clientX, y: event.clientY },
+        }),
+      );
+    };
+    img.addEventListener("click", (event) => notify("open", event));
+    img.addEventListener("contextmenu", (event) => notify("menu", event));
     return img;
+  }
+  ignoreEvent() {
+    return true;
   }
 }
 
@@ -186,7 +203,7 @@ function build(view: EditorView): DecorationSet {
             const src = match && mediaUrl(match[2]);
             if (src) {
               decorations.push(
-                Decoration.replace({ widget: new ImageWidget(src, match[1]) }).range(node.from, node.to),
+                Decoration.replace({ widget: new ImageWidget(src, match[1], mediaName(match[2])) }).range(node.from, node.to),
               );
             }
             return false;

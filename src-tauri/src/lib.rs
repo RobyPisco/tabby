@@ -471,6 +471,7 @@ pub fn run() {
             media::save_image,
             media::save_attachment,
             media::open_media,
+            media::save_media_as,
             media::media_path,
             export::export_notes,
             export::export_combined,

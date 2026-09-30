@@ -133,6 +133,16 @@ pub fn open_media(app: AppHandle, name: String) -> Result<(), String> {
         .map_err(|e| e.to_string())
 }
 
+/// Copia un file della cartella media in un percorso scelto dall'utente ("Salva con nome").
+#[tauri::command]
+pub fn save_media_as(app: AppHandle, name: String, dest: String) -> Result<(), String> {
+    if name.is_empty() || name.contains(['/', '\\']) || name.contains("..") {
+        return Err("nome di file non valido".into());
+    }
+    let path = media_dir(&app)?.join(&name);
+    std::fs::copy(path, dest).map(|_| ()).map_err(|e| e.to_string())
+}
+
 /// All'avvio elimina dalla cartella media i file creati dall'app che nessuna nota
 /// (né il cestino, né la cronologia) cita più.
 pub fn remove_unused(app: &AppHandle) -> Result<usize, String> {
