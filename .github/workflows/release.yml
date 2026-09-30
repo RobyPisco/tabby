@@ -1,0 +1,35 @@
+name: Release
+
+# Si avvia quando pubblichi un tag di versione, ad esempio: git tag v1.0.0 && git push origin v1.0.0
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+      - run: npm ci
+      - run: npm run check
+      - run: npm test
+      - uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: ${{ github.ref_name }}
+          releaseName: "Tabby ${{ github.ref_name }}"
+          releaseBody: "Scarica **Tabby_*_x64-setup.exe** qui sotto e avvialo. Se Windows mostra \"App non riconosciuta\", scegli *Ulteriori informazioni* → *Esegui comunque* (l'installer non è ancora firmato)."
+          releaseDraft: true
+          prerelease: false
