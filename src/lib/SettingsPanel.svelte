@@ -2,7 +2,9 @@
   import { invoke } from "@tauri-apps/api/core";
   import { getVersion } from "@tauri-apps/api/app";
   import { listen } from "@tauri-apps/api/event";
+  import { openUrl } from "@tauri-apps/plugin-opener";
   import { onMount } from "svelte";
+  import { findUpdate, type Release } from "$lib/updates";
   import { COLOR_NAMES, COLORS, vivid } from "$lib/notes";
   import { FONTS, saveSettings, settings, type Settings } from "$lib/settings.svelte";
 
@@ -13,6 +15,8 @@
   let autostart = $state(false);
   let version = $state("");
   let error = $state("");
+  let update_ = $state<Release | null>(null);
+  let updateStatus = $state<"" | "checking" | "latest" | "failed">("");
   let dialog = $state<HTMLElement>();
 
   const SOUNDS: [string, string][] = [
@@ -44,6 +48,17 @@
     }
   }
 
+  async function checkUpdate() {
+    updateStatus = "checking";
+    try {
+      update_ = await findUpdate(version || (await getVersion()));
+      updateStatus = update_ ? "" : "latest";
+    } catch (e) {
+      console.error("controllo aggiornamenti", e);
+      updateStatus = "failed";
+    }
+  }
+
   async function toggleAutostart() {
     try {
       autostart = await invoke<boolean>("set_autostart", { enabled: !autostart });
@@ -54,7 +69,12 @@
   }
 
   onMount(() => {
-    getVersion().then((v) => (version = v)).catch(() => {});
+    getVersion()
+      .then((v) => {
+        version = v;
+        checkUpdate();
+      })
+      .catch(() => {});
     invoke<MonitorInfo[]>("list_monitors").then((list) => (monitors = list));
     invoke<boolean>("get_autostart").then((value) => (autostart = value));
     dialog?.focus();
@@ -242,6 +262,26 @@
       <strong>Tabby</strong>{version ? ` ${version}` : ""}<br />
       Creato da <strong>Roberto Pisco Pisconti</strong>
     </p>
+    <div class="row">
+      <span>
+        {#if update_}
+          <strong>Nuova versione {update_.version} disponibile</strong>
+        {:else if updateStatus === "checking"}
+          Controllo aggiornamenti…
+        {:else if updateStatus === "latest"}
+          Hai l'ultima versione.
+        {:else if updateStatus === "failed"}
+          Non riesco a controllare gli aggiornamenti.
+        {:else}
+          Aggiornamenti
+        {/if}
+      </span>
+      {#if update_}
+        <button class="plain" onclick={() => update_ && openUrl(update_.url)}>Scarica</button>
+      {:else}
+        <button class="plain" disabled={updateStatus === "checking"} onclick={checkUpdate}>Controlla ora</button>
+      {/if}
+    </div>
   </div>
 </div>
 
