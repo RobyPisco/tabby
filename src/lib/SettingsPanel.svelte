@@ -202,6 +202,18 @@
           <button class="plain" onclick={() => invoke("preview_sound", { name: settings.sound_name })}>▶ Prova</button>
         </div>
       </div>
+      <label class="row">
+        <span>Ripeti se non rispondo</span>
+        <select
+          value={settings.repeat_minutes}
+          onchange={(e) => update({ repeat_minutes: Number(e.currentTarget.value) })}
+        >
+          <option value={0}>Mai</option>
+          {#each [1, 2, 5, 10, 15, 30] as m (m)}
+            <option value={m}>Ogni {m} min</option>
+          {/each}
+        </select>
+      </label>
     {/if}
     <label class="row check">
       <span>Avvia con Windows</span>

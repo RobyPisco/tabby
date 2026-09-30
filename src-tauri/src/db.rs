@@ -434,6 +434,27 @@ impl Db {
         rows.collect()
     }
 
+    /// Promemoria già notificati per la scadenza attuale e non ancora chiusi né posticipati.
+    pub fn unhandled_reminders(&self, since: i64) -> rusqlite::Result<Vec<DueReminder>> {
+        let conn = self.0.lock().unwrap();
+        let mut stmt = conn.prepare(&format!(
+            "SELECT n.id, n.title, n.body, {EFFECTIVE_DUE} FROM notes n
+             JOIN reminders r ON r.note_id = n.id
+             WHERE n.deleted_at IS NULL AND n.archived = 0
+               AND r.fired_at >= {EFFECTIVE_DUE} AND {EFFECTIVE_DUE} >= ?1
+             ORDER BY {EFFECTIVE_DUE}"
+        ))?;
+        let rows = stmt.query_map([since], |r| {
+            Ok(DueReminder {
+                note_id: r.get(0)?,
+                title: r.get(1)?,
+                body: r.get(2)?,
+                due_at: r.get(3)?,
+            })
+        })?;
+        rows.collect()
+    }
+
     pub fn mark_fired(&self, note_id: i64, now: i64) -> rusqlite::Result<()> {
         let conn = self.0.lock().unwrap();
         conn.execute(

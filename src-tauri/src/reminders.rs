@@ -2,7 +2,10 @@
 
 use chrono::{Days, Local, Months, NaiveDateTime, NaiveTime, TimeZone};
 use std::{
-    sync::mpsc::{channel, RecvTimeoutError, Sender},
+    collections::HashMap,
+    sync::{mpsc::{channel, RecvTimeoutError, Sender},
+        LazyLock, Mutex,
+    },
     thread,
     time::Duration,
 };
@@ -11,6 +14,7 @@ use tauri_winrt_notification::{Scenario, Toast};
 
 use crate::db::{now, Db, DueReminder};
 use crate::notify_changed_from;
+use crate::settings::SettingsState;
 use crate::toast::{app_id, sound, with_icon};
 
 /// Anche senza scadenze vicine lo scheduler ricontrolla ogni tanto:
@@ -20,6 +24,12 @@ const MAX_SLEEP_SECS: i64 = 30;
 const MAX_SEPARATE_TOASTS: usize = 3;
 /// Ora a cui scatta "Domani" quando si posticipa.
 const TOMORROW_HOUR: u32 = 9;
+
+/// Oltre questo tempo dalla scadenza un promemoria ignorato non viene più ripetuto.
+const REPEAT_GIVE_UP_SECS: i64 = 24 * 60 * 60;
+
+/// Ultimo avviso di ogni promemoria non gestito; `i64::MAX` = ripetizione fermata.
+static LAST_ALERT: LazyLock<Mutex<HashMap<i64, i64>>> = LazyLock::new(Default::default);
 
 /// Stato gestito da Tauri: sveglia lo scheduler quando i promemoria cambiano.
 pub struct Scheduler(Sender<()>);
@@ -35,6 +45,7 @@ pub fn start(app: &AppHandle) -> Scheduler {
     let app = app.clone();
     thread::spawn(move || loop {
         fire_due(&app);
+        repeat_unhandled(&app);
         let db = app.state::<Db>();
         let wait = match db.next_pending_due() {
             Ok(Some(due)) => (due - now()).clamp(1, MAX_SLEEP_SECS),
@@ -68,6 +79,29 @@ fn fire_due(app: &AppHandle) {
         let _ = db.mark_fired(reminder.note_id, t);
     }
     notify_changed_from(app, "scheduler");
+}
+
+/// Ripete notifica e suono dei promemoria lasciati senza risposta, ogni `repeat_minutes`.
+fn repeat_unhandled(app: &AppHandle) {
+    let minutes = app.state::<SettingsState>().get().repeat_minutes;
+    let mut last = LAST_ALERT.lock().unwrap();
+    if minutes == 0 {
+        last.clear();
+        return;
+    }
+    let t = now();
+    let Ok(pending) = app.state::<Db>().unhandled_reminders(t - REPEAT_GIVE_UP_SECS) else {
+        return;
+    };
+    last.retain(|id, _| pending.iter().any(|r| r.note_id == *id));
+    for reminder in &pending {
+        // La prima volta si parte a contare da adesso: l'avviso originale è già uscito.
+        let at = *last.entry(reminder.note_id).or_insert(t);
+        if at != i64::MAX && t - at >= i64::from(minutes) * 60 {
+            last.insert(reminder.note_id, t);
+            show_toast(app, reminder);
+        }
+    }
 }
 
 fn show_toast(app: &AppHandle, reminder: &DueReminder) {
@@ -152,6 +186,7 @@ pub fn apply_action(app: &AppHandle, note_id: i64, action: &str) {
         "tomorrow" => db.snooze_reminder(note_id, tomorrow_at(TOMORROW_HOUR).unwrap_or(t + 86_400)),
         "done" => complete(&db, note_id, t),
         "open" => {
+            LAST_ALERT.lock().unwrap().insert(note_id, i64::MAX);
             open_note_in_deck(app, note_id);
             return;
         }

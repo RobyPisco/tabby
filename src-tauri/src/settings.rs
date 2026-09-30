@@ -11,6 +11,7 @@ pub const SOUNDS: [&str; 9] = [
     "reminder", "default", "im", "mail", "sms", "alarm", "alarm2", "call", "call2",
 ];
 
+const REPEAT_MINUTES_MAX: u32 = 120;
 const NOTE_WIDTH_RANGE: (u32, u32) = (280, 520);
 const EDITOR_SIZE_RANGE: (u32, u32) = (13, 24);
 const DECK_TRANSPARENCY_MAX: u32 = 100;
@@ -33,6 +34,8 @@ pub struct Settings {
     pub sound: bool,
     /// Quale suono: una delle chiavi di `SOUNDS`.
     pub sound_name: String,
+    /// Ogni quanti minuti ripetere la notifica finché il promemoria non è gestito; 0 = mai.
+    pub repeat_minutes: u32,
     /// Tema di "Tutte le note": "auto", "light" o "dark".
     pub theme: String,
     /// Trasparenza del vetro delle schede nel deck, da 0 (opaco) a 100.
@@ -50,6 +53,7 @@ impl Default for Settings {
             new_note_color: "cycle".into(),
             sound: true,
             sound_name: "reminder".into(),
+            repeat_minutes: 0,
             theme: "auto".into(),
             deck_transparency: 45,
         }
@@ -81,6 +85,7 @@ impl Settings {
             },
             sound: self.sound,
             sound_name: one_of(self.sound_name, &SOUNDS, &default.sound_name),
+            repeat_minutes: self.repeat_minutes.min(REPEAT_MINUTES_MAX),
             theme: one_of(self.theme, &["auto", "light", "dark"], &default.theme),
             deck_transparency: self.deck_transparency.min(DECK_TRANSPARENCY_MAX),
         }

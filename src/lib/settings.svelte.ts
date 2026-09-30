@@ -12,6 +12,8 @@ export type Settings = {
   new_note_color: string;
   sound: boolean;
   sound_name: string;
+  /** Ripete la notifica ogni N minuti finché non è gestita; 0 = mai. */
+  repeat_minutes: number;
   theme: "auto" | "light" | "dark";
   /** Trasparenza del vetro delle schede nel deck, 0-100. */
   deck_transparency: number;
@@ -33,6 +35,7 @@ export const settings = $state<Settings>({
   new_note_color: "cycle",
   sound: true,
   sound_name: "reminder",
+  repeat_minutes: 0,
   theme: "auto",
   deck_transparency: 45,
 });
