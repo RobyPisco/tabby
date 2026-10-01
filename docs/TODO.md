@@ -84,5 +84,5 @@ Dettagli di progetto e motivazioni in [`PIANO.md`](PIANO.md).
   - Note di sola lettura (deck e "Tutte le note"), con badge, orario dell'evento e "Elimina" nel deck.
 - [x] Client Secret fuori dal repo: variabile di build `TABBY_GOOGLE_CLIENT_SECRET` (secret `GOOGLE_CLIENT_SECRET` nel workflow).
 - [ ] App Google: pubblicata "In produzione" senza verifica (tetto 100 utenti, avviso "app non verificata").
-- [x] Reti con proxy aziendale (PAC + autenticazione NTLM/Negotiate): le chiamate a Google passano da WinHTTP (`http.rs`), che usa proxy di sistema, credenziali di Windows e certificati dell'archivio. Da provare su una rete con proxy.
+- [x] Reti con proxy aziendale (PAC + autenticazione NTLM/Negotiate): le chiamate a Google passano da WinHTTP (`http.rs`), che usa proxy di sistema, credenziali di Windows e certificati dell'archivio. Provato su una rete con proxy PAC + NTLM. Opzione «Usa il proxy di Windows» spenta di default (accesa per chi aveva già usato Calendar).
 - [ ] Calendari deselezionati: le note già importate restano.

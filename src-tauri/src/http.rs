@@ -4,11 +4,23 @@
 //! file PAC / rilevamento automatico, autenticazione integrata (NTLM/Negotiate con l'utente
 //! collegato) e certificati dell'archivio di Windows.
 
-use std::{ffi::c_void, iter::once, ptr};
+use std::{
+    ffi::c_void,
+    iter::once,
+    ptr,
+    sync::atomic::{AtomicBool, Ordering},
+};
 use windows_sys::Win32::{
     Foundation::{GetLastError, GlobalFree},
     Networking::WinHttp::*,
 };
+
+/// Se falso (impostazione dell'utente) si va sempre in diretta: niente proxy né credenziali.
+static USE_PROXY: AtomicBool = AtomicBool::new(false);
+
+pub fn set_use_proxy(on: bool) {
+    USE_PROXY.store(on, Ordering::Relaxed);
+}
 
 pub struct Response {
     pub status: u16,
@@ -35,7 +47,12 @@ impl Drop for Handle {
 }
 
 fn last_error(what: &str) -> String {
-    format!("{what}: errore di rete WinHTTP {}", unsafe { GetLastError() })
+    let hint = if USE_PROXY.load(Ordering::Relaxed) {
+        ""
+    } else {
+        " (se sei dietro un proxy aziendale, attiva «Usa il proxy di Windows» nelle impostazioni)"
+    };
+    format!("{what}: errore di rete WinHTTP {}{hint}", unsafe { GetLastError() })
 }
 
 fn wide(s: &str) -> Vec<u16> {
@@ -133,11 +150,12 @@ pub fn request(
     body: Option<&[u8]>,
 ) -> Result<Response, String> {
     let (secure, host, port, path) = split_url(url)?;
+    let use_proxy = USE_PROXY.load(Ordering::Relaxed);
     unsafe {
         let session = Handle::new(
             WinHttpOpen(
                 wide("Tabby").as_ptr(),
-                WINHTTP_ACCESS_TYPE_AUTOMATIC_PROXY,
+                if use_proxy { WINHTTP_ACCESS_TYPE_AUTOMATIC_PROXY } else { WINHTTP_ACCESS_TYPE_NO_PROXY },
                 ptr::null(),
                 ptr::null(),
                 0,
@@ -162,7 +180,8 @@ pub fn request(
             "WinHttpOpenRequest",
         )?;
 
-        match resolve_route(session.0, &wide(url)) {
+        let route = if use_proxy { resolve_route(session.0, &wide(url)) } else { Route::Default };
+        match route {
             Route::Default => {}
             Route::Direct => {
                 let info = WINHTTP_PROXY_INFO {
@@ -220,7 +239,7 @@ pub fn request(
             {
                 return Err(last_error("WinHttpQueryHeaders"));
             }
-            if status != 407 && status != 401 {
+            if !use_proxy || (status != 407 && status != 401) {
                 break;
             }
             let (mut supported, mut first, mut target) = (0u32, 0u32, 0u32);

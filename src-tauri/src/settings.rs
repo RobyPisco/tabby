@@ -46,6 +46,8 @@ pub struct Settings {
     pub gcal_sync_weeks: u32,
     /// ID dei calendari Google selezionati dall'utente.
     pub gcal_calendar_ids: Vec<String>,
+    /// Usa il proxy di Windows (PAC, credenziali dell'utente) per le chiamate a Google.
+    pub gcal_use_proxy: bool,
 }
 
 impl Default for Settings {
@@ -65,6 +67,7 @@ impl Default for Settings {
             gcal_enabled: false,
             gcal_sync_weeks: 2,
             gcal_calendar_ids: vec![],
+            gcal_use_proxy: false,
         }
     }
 }
@@ -100,6 +103,7 @@ impl Settings {
             gcal_enabled: self.gcal_enabled,
             gcal_sync_weeks: self.gcal_sync_weeks.clamp(1, 2),
             gcal_calendar_ids: self.gcal_calendar_ids,
+            gcal_use_proxy: self.gcal_use_proxy,
         }
     }
 
@@ -129,9 +133,10 @@ impl SettingsState {
     pub fn load(path: PathBuf) -> Self {
         let value = std::fs::read_to_string(&path)
             .ok()
-            .and_then(|text| serde_json::from_str::<Settings>(&text).ok())
+            .and_then(|text| parse(&text))
             .unwrap_or_default()
             .sanitized();
+        crate::http::set_use_proxy(value.gcal_use_proxy);
         SettingsState {
             path,
             value: Mutex::new(value),
@@ -147,13 +152,25 @@ impl SettingsState {
         let text = serde_json::to_string_pretty(&settings).map_err(|e| e.to_string())?;
         std::fs::write(&self.path, text).map_err(|e| e.to_string())?;
         *self.value.lock().unwrap() = settings.clone();
+        crate::http::set_use_proxy(settings.gcal_use_proxy);
         Ok(settings)
     }
 }
 
+/// Legge `settings.json`. Chi aveva già usato Google Calendar prima che esistesse l'opzione
+/// del proxy (quando il proxy di Windows era sempre attivo) lo ritrova acceso.
+fn parse(text: &str) -> Option<Settings> {
+    let mut json: serde_json::Value = serde_json::from_str(text).ok()?;
+    let obj = json.as_object_mut()?;
+    if obj.contains_key("gcal_enabled") && !obj.contains_key("gcal_use_proxy") {
+        obj.insert("gcal_use_proxy".into(), true.into());
+    }
+    serde_json::from_value(json).ok()
+}
+
 #[cfg(test)]
 mod tests {
-    use super::Settings;
+    use super::{parse, Settings};
 
     #[test]
     fn invalid_values_fall_back() {
@@ -179,5 +196,15 @@ mod tests {
         assert_eq!(s.side, "left");
         assert_eq!(s.note_width, 340);
         assert!(s.sound);
+    }
+
+    #[test]
+    fn proxy_default_depends_on_previous_calendar_use() {
+        // Installazione nuova o aggiornamento da una versione senza Calendar: spento.
+        assert!(!parse(r#"{ "side": "left" }"#).unwrap().gcal_use_proxy);
+        // Aveva già usato Calendar quando il proxy era sempre attivo: resta acceso.
+        assert!(parse(r#"{ "gcal_enabled": true }"#).unwrap().gcal_use_proxy);
+        // Scelta esplicita dell'utente: si rispetta.
+        assert!(!parse(r#"{ "gcal_enabled": true, "gcal_use_proxy": false }"#).unwrap().gcal_use_proxy);
     }
 }

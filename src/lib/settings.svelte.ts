@@ -23,6 +23,8 @@ export type Settings = {
   gcal_sync_weeks: 1 | 2;
   /** ID dei calendari selezionati. */
   gcal_calendar_ids: string[];
+  /** Usa il proxy di Windows (PAC, credenziali dell'utente) per le chiamate a Google. */
+  gcal_use_proxy: boolean;
 };
 
 export const FONTS: Record<Settings["editor_font"], { label: string; css: string }> = {
@@ -47,6 +49,7 @@ export const settings = $state<Settings>({
   gcal_enabled: false,
   gcal_sync_weeks: 2,
   gcal_calendar_ids: [],
+  gcal_use_proxy: false,
 });
 
 /** Larghezza della finestra del deck: deve restare uguale a `dock_width` in settings.rs. */

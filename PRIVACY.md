@@ -19,6 +19,10 @@ Se scegli "Collega Google" nelle impostazioni, Tabby chiede un solo permesso: **
 
 L'uso e il trasferimento a qualsiasi altra app delle informazioni ricevute dalle API di Google rispetterà la [Google API Services User Data Policy](https://developers.google.com/terms/api-services-user-data-policy), inclusi i requisiti di Limited Use.
 
+## Proxy aziendali
+
+Per impostazione predefinita Tabby si collega a Google direttamente. Solo se attivi tu l'opzione «Usa il proxy di Windows», le richieste passano dal proxy configurato in Windows e Tabby si autentica con le credenziali dell'utente collegato, tramite l'autenticazione integrata di Windows (come un browser). Le credenziali non vengono lette né salvate da Tabby.
+
 ## Aggiornamenti
 
 Dalle impostazioni Tabby può controllare se esiste una nuova versione contattando le pagine pubbliche delle release su GitHub. Non invia alcun dato personale.

@@ -264,6 +264,9 @@ fn token_from(resp: &serde_json::Value, old_refresh: Option<&str>) -> Result<Tok
 // -- HTTP ---------------------------------------------------------------------
 
 fn parse_json(resp: http::Response) -> Result<serde_json::Value, String> {
+    if resp.status == 407 {
+        return Err("il proxy richiede l'autenticazione: attiva «Usa il proxy di Windows» nelle impostazioni".into());
+    }
     serde_json::from_slice(&resp.body)
         .map_err(|_| format!("risposta non valida da Google (HTTP {})", resp.status))
 }

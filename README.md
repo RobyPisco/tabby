@@ -13,7 +13,7 @@ Il piano è in [`docs/PIANO.md`](docs/PIANO.md); cosa è fatto e cosa resta in [
 
 ## Scarica
 
-Vai alla pagina delle [**Releases**](https://github.com/RobyPisco/tabby/releases/latest) e scarica `Tabby_*_x64-setup.exe` (oppure l'`.msi`). Serve Windows 10/11, non serve essere amministratori.
+Vai alla pagina delle [**Releases**](https://github.com/RobyPisco/tabby/releases/latest) e scarica `Tabby_*_x64-setup.exe` (oppure l'`.msi`). Serve Windows 10/11. L'installer propone di installare **per tutti gli utenti** (in `C:\Programmi\Tabby`, serve un account amministratore) oppure **solo per te** (in `%LOCALAPPDATA%\Tabby`, senza amministratore). Se aggiorni da una versione precedente installata "solo per te", scegli di nuovo quella modalità, oppure disinstalla prima la vecchia: i dati (note, immagini, impostazioni) non vengono toccati.
 
 L'installer non è ancora firmato: se Windows mostra "App non riconosciuta", scegli *Ulteriori informazioni* → *Esegui comunque*.
 
@@ -27,7 +27,7 @@ L'installer non è ancora firmato: se Windows mostra "App non riconosciuta", sce
 - **Editor Markdown dal vivo**: caselle da spuntare, titoli, grassetto/corsivo, immagini e allegati incollati o trascinati, link web, link tra note `[[titolo]]` e tag `#parola`; modelli rapidi.
 - **Tutte le note**: ricerca full-text (anche senza accenti), filtri, cartelle, tag, selezione multipla, cestino, cronologia delle versioni, "Citata in".
 - **Promemoria** con ricorrenza, notifiche di Windows con *10 min / 1 ora / Domani / Fatto*, date scritte a parole ("domani alle 9").
-- **Google Calendar** (facoltativo): gli eventi dei prossimi 7-14 giorni diventano note in sola lettura con promemoria; Tabby chiede solo la lettura del calendario e funziona anche dietro proxy aziendali (PAC, autenticazione di Windows).
+- **Google Calendar** (facoltativo): gli eventi dei prossimi 7-14 giorni diventano note in sola lettura con promemoria; Tabby chiede solo la lettura del calendario e, se lo attivi, funziona anche dietro proxy aziendali (PAC, autenticazione di Windows).
 - **Cattura rapida** degli appunti, **export** (Markdown/testo, un file per nota o file unico) e **import**.
 - **Impostazioni**: bordo, larghezza, schermo, carattere, colore delle note nuove, suono, tema, avvio con Windows.
 
@@ -49,6 +49,8 @@ Se un'altra app occupa già una scorciatoia globale, quella viene saltata senza 
 ## Google Calendar
 
 In *Impostazioni → Google Calendar* clicca "Collega Google", accedi dal browser e scegli i calendari. Tabby ha il permesso di **sola lettura** (non può modificare né cancellare eventi) e il token resta sul tuo PC, in `%APPDATA%\it.pisco.tabby\gcal_token.json`.
+
+**Dietro un proxy aziendale** attiva «Usa il proxy di Windows»: Tabby usa le impostazioni di proxy di Windows (anche file PAC) e si autentica con le credenziali dell'utente collegato, come fa il browser. È spento di default: così Tabby si collega a Google direttamente, senza mai usare le tue credenziali di rete.
 
 Poiché l'app Google non è stata sottoposta alla verifica, al primo accesso Google mostra "app non verificata": scegli *Avanzate* → *Vai a Tabby (non sicuro)*.
 

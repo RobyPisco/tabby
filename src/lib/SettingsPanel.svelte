@@ -322,6 +322,18 @@
     </div>
 
     <h3>Google Calendar</h3>
+    <label class="row check">
+      <span>
+        Usa il proxy di Windows
+        <small class="hint" style="display: block; margin: 2px 0 0">Per reti aziendali con proxy: Tabby usa le impostazioni di Windows e le tue credenziali di accesso. Se spento, si collega a Google direttamente.</small>
+      </span>
+      <input
+        type="checkbox"
+        id="gcal-proxy-check"
+        checked={settings.gcal_use_proxy}
+        onchange={(e) => update({ gcal_use_proxy: e.currentTarget.checked })}
+      />
+    </label>
     {#if !gcalStatus.connected}
       <div class="row">
         <span>Collega il tuo account Google per importare gli eventi come note con promemoria.</span>
