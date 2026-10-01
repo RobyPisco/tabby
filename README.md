@@ -52,6 +52,8 @@ In *Impostazioni → Google Calendar* clicca "Collega Google", accedi dal browse
 
 Poiché l'app Google non è stata sottoposta alla verifica, al primo accesso Google mostra "app non verificata": scegli *Avanzate* → *Vai a Tabby (non sicuro)*.
 
+Maggiori dettagli nell'[informativa sulla privacy](PRIVACY.md).
+
 ## Dati
 
 Tutto resta sul PC, in `%APPDATA%\it.pisco.tabby\` (o nella cartella indicata da `TABBY_DATA_DIR`, utile per le prove): `notes.db` (SQLite), `media\` (immagini e allegati), `settings.json`. Dalle impostazioni c'è "Apri la cartella".
