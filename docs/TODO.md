@@ -84,6 +84,5 @@ Dettagli di progetto e motivazioni in [`PIANO.md`](PIANO.md).
   - Note di sola lettura (deck e "Tutte le note"), con badge, orario dell'evento e "Elimina" nel deck.
 - [ ] App Google ancora in modalità "Testing": solo gli utenti di prova possono collegarsi e il
   token scade dopo 7 giorni. Per l'uso generale serve la verifica Google (scope sensibile).
-- [ ] Reti con proxy aziendale (PAC + autenticazione NTLM/Negotiate): `reqwest` non le gestisce.
-  Passare a WinHTTP (`windows-sys`) e rimuovere `reqwest`.
+- [x] Reti con proxy aziendale (PAC + autenticazione NTLM/Negotiate): le chiamate a Google passano da WinHTTP (`http.rs`), che usa proxy di sistema, credenziali di Windows e certificati dell'archivio. Da provare su una rete con proxy.
 - [ ] Calendari deselezionati: le note già importate restano.

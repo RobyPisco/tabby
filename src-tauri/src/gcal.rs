@@ -14,7 +14,6 @@
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
 use chrono::{DateTime, Local, TimeDelta, TimeZone, Utc};
 use rand::RngCore;
-use reqwest::blocking::Client;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::{
@@ -30,7 +29,7 @@ use std::{
 };
 use tauri::{AppHandle, Manager};
 
-use crate::{db::Db, notify_changed_from, settings::SettingsState};
+use crate::{db::Db, http, notify_changed_from, settings::SettingsState};
 
 // -- Credenziali OAuth2 -------------------------------------------------------
 // Sostituisci con le credenziali del tuo progetto Google Cloud.
@@ -53,15 +52,6 @@ struct Token {
     access_token: String,
     refresh_token: String,
     expires_at: i64,
-}
-
-#[derive(Serialize, Deserialize)]
-struct TokenResponse {
-    access_token: String,
-    refresh_token: Option<String>,
-    expires_in: i64,
-    #[serde(default)]
-    error: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -219,64 +209,85 @@ fn wait_for_code(listener: TcpListener) -> Result<String, String> {
 }
 
 fn exchange_code(code: &str, verifier: &str, redirect_uri: &str) -> Result<Token, String> {
-    let resp: TokenResponse = Client::new()
-        .post(TOKEN_URL)
-        .form(&[
+    let resp = post_form(
+        TOKEN_URL,
+        &[
             ("client_id", CLIENT_ID),
             ("client_secret", CLIENT_SECRET),
             ("code", code),
             ("redirect_uri", redirect_uri),
             ("grant_type", "authorization_code"),
             ("code_verifier", verifier),
-        ])
-        .send()
-        .map_err(|e| e.to_string())?
-        .json()
-        .map_err(|e| e.to_string())?;
-    if let Some(err) = resp.error {
-        return Err(err);
-    }
-    Ok(Token {
-        access_token: resp.access_token,
-        refresh_token: resp.refresh_token.ok_or("nessun refresh_token")?,
-        expires_at: Utc::now().timestamp() + resp.expires_in,
-    })
+        ],
+    )?;
+    token_from(&resp, None)
 }
 
 fn do_refresh_token(refresh_tok: &str) -> Result<Token, String> {
-    let resp: TokenResponse = Client::new()
-        .post(TOKEN_URL)
-        .form(&[
+    let resp = post_form(
+        TOKEN_URL,
+        &[
             ("client_id", CLIENT_ID),
             ("client_secret", CLIENT_SECRET),
             ("refresh_token", refresh_tok),
             ("grant_type", "refresh_token"),
-        ])
-        .send()
-        .map_err(|e| e.to_string())?
-        .json()
-        .map_err(|e| e.to_string())?;
-    if let Some(err) = resp.error {
-        return Err(err);
+        ],
+    )?;
+    token_from(&resp, Some(refresh_tok))
+}
+
+fn token_from(resp: &serde_json::Value, old_refresh: Option<&str>) -> Result<Token, String> {
+    if let Some(err) = resp["error"].as_str() {
+        let detail = resp["error_description"].as_str().unwrap_or("");
+        return Err(format!("{err} {detail}").trim().to_string());
     }
     Ok(Token {
-        access_token: resp.access_token,
-        refresh_token: resp.refresh_token.unwrap_or_else(|| refresh_tok.to_string()),
-        expires_at: Utc::now().timestamp() + resp.expires_in,
+        access_token: resp["access_token"].as_str().ok_or("risposta senza access_token")?.to_string(),
+        refresh_token: resp["refresh_token"]
+            .as_str()
+            .or(old_refresh)
+            .ok_or("nessun refresh_token")?
+            .to_string(),
+        expires_at: Utc::now().timestamp() + resp["expires_in"].as_i64().unwrap_or(3600),
     })
+}
+
+// -- HTTP ---------------------------------------------------------------------
+
+fn parse_json(resp: http::Response) -> Result<serde_json::Value, String> {
+    serde_json::from_slice(&resp.body)
+        .map_err(|_| format!("risposta non valida da Google (HTTP {})", resp.status))
+}
+
+fn post_form(url: &str, fields: &[(&str, &str)]) -> Result<serde_json::Value, String> {
+    let body = serde_urlencoded::to_string(fields).map_err(|e| e.to_string())?;
+    let resp = http::request(
+        "POST",
+        url,
+        &[("Content-Type", "application/x-www-form-urlencoded")],
+        Some(body.as_bytes()),
+    )?;
+    parse_json(resp)
+}
+
+fn get_json(url: &str, token: &str, query: &[(&str, &str)]) -> Result<serde_json::Value, String> {
+    let full = if query.is_empty() {
+        url.to_string()
+    } else {
+        format!("{url}?{}", serde_urlencoded::to_string(query).map_err(|e| e.to_string())?)
+    };
+    let bearer = format!("Bearer {token}");
+    parse_json(http::request("GET", &full, &[("Authorization", &bearer)], None)?)
 }
 
 // -- API Google Calendar ------------------------------------------------------
 
 pub fn list_calendars(state: &GcalState) -> Result<Vec<GcalCalendar>, String> {
     let token = state.access_token()?;
-    let resp: serde_json::Value = Client::new()
-        .get(format!("{CALENDAR_API}/users/me/calendarList"))
-        .bearer_auth(&token)
-        .send()
-        .map_err(|e| e.to_string())?
-        .json()
-        .map_err(|e| e.to_string())?;
+    let resp = get_json(&format!("{CALENDAR_API}/users/me/calendarList"), &token, &[])?;
+    if let Some(err) = resp["error"]["message"].as_str() {
+        return Err(format!("Google ha risposto: {err}"));
+    }
     let items = resp["items"].as_array().ok_or("risposta inattesa")?;
     Ok(items
         .iter()
@@ -305,7 +316,6 @@ pub fn sync(app: &AppHandle) -> Result<usize, String> {
 
     let folder_id = db.gcal_folder_id().map_err(|e| e.to_string())?;
     let token = state.access_token()?;
-    let client = Client::new();
 
     let now_dt: DateTime<Utc> = Utc::now();
     let weeks = settings.gcal_sync_weeks.clamp(1, 2) as i64;
@@ -317,20 +327,18 @@ pub fn sync(app: &AppHandle) -> Result<usize, String> {
 
     for cal_id in &settings.gcal_calendar_ids {
         let url = format!("{CALENDAR_API}/calendars/{}/events", urlencoded(cal_id));
-        let resp: serde_json::Value = client
-            .get(&url)
-            .bearer_auth(&token)
-            .query(&[
+        let resp = get_json(
+            &url,
+            &token,
+            &[
                 ("singleEvents", "true"),
                 ("orderBy", "startTime"),
                 ("timeMin", &time_min),
                 ("timeMax", &time_max),
                 ("maxResults", "250"),
-            ])
-            .send()
-            .map_err(|e| format!("errore Calendar per {cal_id}: {e}"))?
-            .json()
-            .map_err(|e| e.to_string())?;
+            ],
+        )
+        .map_err(|e| format!("errore Calendar per {cal_id}: {e}"))?;
 
         if let Some(err) = resp["error"]["message"].as_str() {
             return Err(format!("Google ha risposto per {cal_id}: {err}"));

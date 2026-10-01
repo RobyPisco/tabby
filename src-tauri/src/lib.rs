@@ -3,6 +3,7 @@ mod db;
 mod dock;
 mod export;
 mod gcal;
+mod http;
 mod media;
 mod organize;
 mod reminders;
