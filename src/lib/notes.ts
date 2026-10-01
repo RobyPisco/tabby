@@ -16,6 +16,8 @@ export type Note = {
   repeat: Repeat | null;
   pinned: boolean;
   folder_id: number | null;
+  /** ID evento Google Calendar; `null` per le note normali. Nota in sola lettura. */
+  gcal_event_id: string | null;
 };
 
 export type Folder = { id: number; name: string; count: number };

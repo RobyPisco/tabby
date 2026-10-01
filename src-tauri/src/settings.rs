@@ -40,6 +40,12 @@ pub struct Settings {
     pub theme: String,
     /// Trasparenza del vetro delle schede nel deck, da 0 (opaco) a 100.
     pub deck_transparency: u32,
+    /// Integrazione Google Calendar attiva.
+    pub gcal_enabled: bool,
+    /// Quante settimane di eventi importare (1 o 2).
+    pub gcal_sync_weeks: u32,
+    /// ID dei calendari Google selezionati dall'utente.
+    pub gcal_calendar_ids: Vec<String>,
 }
 
 impl Default for Settings {
@@ -56,6 +62,9 @@ impl Default for Settings {
             repeat_minutes: 0,
             theme: "auto".into(),
             deck_transparency: 45,
+            gcal_enabled: false,
+            gcal_sync_weeks: 2,
+            gcal_calendar_ids: vec![],
         }
     }
 }
@@ -88,6 +97,9 @@ impl Settings {
             repeat_minutes: self.repeat_minutes.min(REPEAT_MINUTES_MAX),
             theme: one_of(self.theme, &["auto", "light", "dark"], &default.theme),
             deck_transparency: self.deck_transparency.min(DECK_TRANSPARENCY_MAX),
+            gcal_enabled: self.gcal_enabled,
+            gcal_sync_weeks: self.gcal_sync_weeks.clamp(1, 2),
+            gcal_calendar_ids: self.gcal_calendar_ids,
         }
     }
 

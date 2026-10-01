@@ -308,6 +308,17 @@
     editing = false;
   }
 
+  /** Sposta la nota nel cestino (si recupera dalla finestra "Tutte le note"). */
+  async function trashOpen() {
+    if (!openNote) return;
+    const id = openNote.id;
+    await flushSave();
+    await invoke("set_trashed", { ids: [id], trashed: true });
+    notes = notes.filter((n) => n.id !== id);
+    openId = null;
+    editing = false;
+  }
+
   function onKeydown(event: KeyboardEvent) {
     if (event.key === "Escape" && phase !== "rest") {
       (document.activeElement as HTMLElement | null)?.blur();
@@ -400,19 +411,22 @@
             bind:this={titleInput}
             bind:value={openNote.title}
             oninput={scheduleSave}
+            readonly={openNote.gcal_event_id !== null}
           />
-          <button
-            class="icon-btn"
-            onmousedown={(e) => e.preventDefault()}
-            onclick={() => editor?.toggleChecklist()}
-            aria-label="Casella da spuntare"
-            title="Casella da spuntare (Ctrl+L)"
-          >
-            <svg viewBox="0 0 20 20" aria-hidden="true">
-              <rect x="3" y="3" width="14" height="14" rx="3.5" />
-              <path d="m6.5 10.2 2.4 2.4 4.6-5" />
-            </svg>
-          </button>
+          {#if openNote.gcal_event_id === null}
+            <button
+              class="icon-btn"
+              onmousedown={(e) => e.preventDefault()}
+              onclick={() => editor?.toggleChecklist()}
+              aria-label="Casella da spuntare"
+              title="Casella da spuntare (Ctrl+L)"
+            >
+              <svg viewBox="0 0 20 20" aria-hidden="true">
+                <rect x="3" y="3" width="14" height="14" rx="3.5" />
+                <path d="m6.5 10.2 2.4 2.4 4.6-5" />
+              </svg>
+            </button>
+          {/if}
           <button
             class="icon-btn"
             class:on={openNote.pinned}
@@ -434,9 +448,22 @@
           <ColorPicker color={openNote.color} onpick={setColor} />
           <button class="archive" onclick={archiveOpen} title="Archivia">Archivia</button>
         </header>
+        {#if openNote.gcal_event_id !== null}
+          <div class="gcal-badge">
+            <span>📅 Evento di Google Calendar · sola lettura</span>
+            <button class="gcal-trash" onclick={trashOpen} title="Sposta nel cestino">Elimina</button>
+          </div>
+        {/if}
         <ReminderLine note={openNote} onaction={reminderAction} />
-        <NoteEditor bind:this={editor} value={openNote.body} onchange={setBody} onopenlink={openLink} />
-        {#if openNote.body === ""}
+        <NoteEditor
+          bind:this={editor}
+          value={openNote.body}
+          onchange={setBody}
+          onopenlink={openLink}
+          readonly={openNote.gcal_event_id !== null}
+          placeholder={openNote.gcal_event_id !== null ? "Nessun dettaglio" : undefined}
+        />
+        {#if openNote.body === "" && openNote.gcal_event_id === null}
           <Templates onpick={applyTemplate} />
         {/if}
       </article>
@@ -446,6 +473,28 @@
 </div>
 
 <style>
+  .gcal-badge {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin: 0 0 6px;
+    font-size: 11px;
+    color: rgba(0, 0, 0, 0.6);
+  }
+  .gcal-trash {
+    border: 0;
+    border-radius: 8px;
+    padding: 3px 8px;
+    background: rgba(0, 0, 0, 0.08);
+    font: 600 11px "Segoe UI", system-ui, sans-serif;
+    color: rgba(0, 0, 0, 0.6);
+    cursor: pointer;
+  }
+  .gcal-trash:hover {
+    background: rgba(0, 0, 0, 0.16);
+  }
+
   :global(html),
   :global(body) {
     background: transparent;

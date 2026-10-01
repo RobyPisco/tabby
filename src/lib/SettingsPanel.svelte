@@ -11,6 +11,9 @@
   let { onclose }: { onclose: () => void } = $props();
 
   type MonitorInfo = { name: string; label: string };
+  type GcalCalendar = { id: string; summary: string; color: string };
+  type GcalStatus = { connected: boolean; last_sync: number | null; last_error: string | null };
+
   let monitors = $state<MonitorInfo[]>([]);
   let autostart = $state(false);
   let version = $state("");
@@ -18,6 +21,12 @@
   let update_ = $state<Release | null>(null);
   let updateStatus = $state<"" | "checking" | "latest" | "failed">("");
   let dialog = $state<HTMLElement>();
+  // Google Calendar
+  let gcalStatus = $state<GcalStatus>({ connected: false, last_sync: null, last_error: null });
+  let gcalCalendars = $state<GcalCalendar[]>([]);
+  let gcalConnecting = $state(false);
+  let gcalSyncing = $state(false);
+  let gcalSyncResult = $state<string>("");
 
   const SOUNDS: [string, string][] = [
     ["reminder", "Promemoria"],
@@ -68,6 +77,49 @@
     }
   }
 
+  async function gcalConnect() {
+    gcalConnecting = true;
+    error = "";
+    try {
+      await invoke("gcal_connect");
+      gcalCalendars = await invoke<GcalCalendar[]>("gcal_list_calendars");
+    } catch (e) {
+      error = `Google Calendar: ${e}`;
+    } finally {
+      gcalConnecting = false;
+    }
+  }
+
+  async function gcalDisconnect() {
+    try {
+      await invoke("gcal_disconnect");
+      gcalCalendars = [];
+      await saveSettings({ gcal_enabled: false, gcal_calendar_ids: [] });
+    } catch (e) {
+      error = `Google Calendar: ${e}`;
+    }
+  }
+
+  async function gcalSyncNow() {
+    gcalSyncing = true;
+    gcalSyncResult = "";
+    try {
+      const n = await invoke<number>("gcal_sync_now");
+      gcalSyncResult = `${n} event${n === 1 ? "o" : "i"} importat${n === 1 ? "o" : "i"}`;
+    } catch (e) {
+      error = `Sync: ${e}`;
+    } finally {
+      gcalSyncing = false;
+    }
+  }
+
+  function toggleCalendar(id: string) {
+    const ids = settings.gcal_calendar_ids.includes(id)
+      ? settings.gcal_calendar_ids.filter((c) => c !== id)
+      : [...settings.gcal_calendar_ids, id];
+    update({ gcal_calendar_ids: ids });
+  }
+
   onMount(() => {
     getVersion()
       .then((v) => {
@@ -77,11 +129,23 @@
       .catch(() => {});
     invoke<MonitorInfo[]>("list_monitors").then((list) => (monitors = list));
     invoke<boolean>("get_autostart").then((value) => (autostart = value));
+    invoke<GcalStatus>("gcal_status").then((s) => {
+      gcalStatus = s;
+      if (s.connected) {
+        invoke<GcalCalendar[]>("gcal_list_calendars")
+          .then((cals) => (gcalCalendars = cals))
+          .catch(() => {});
+      }
+    });
     dialog?.focus();
     // Cambiato dal menu della tray mentre il pannello è aperto.
     const unlisten = listen("autostart-changed", async () => (autostart = await invoke<boolean>("get_autostart")));
+    const unlistenGcal = listen<GcalStatus>("gcal-status-changed", ({ payload }) => {
+      gcalStatus = payload;
+    });
     return () => {
       unlisten.then((fn) => fn());
+      unlistenGcal.then((fn) => fn());
     };
   });
 </script>
@@ -256,6 +320,75 @@
       <span>Note, immagini e impostazioni sono salvate sul PC.</span>
       <button class="plain" onclick={() => invoke("open_data_folder")}>Apri la cartella</button>
     </div>
+
+    <h3>Google Calendar</h3>
+    {#if !gcalStatus.connected}
+      <div class="row">
+        <span>Collega il tuo account Google per importare gli eventi come note con promemoria.</span>
+        <button
+          id="gcal-connect-btn"
+          class="plain gcal-btn"
+          disabled={gcalConnecting}
+          onclick={gcalConnect}
+        >
+          {gcalConnecting ? "Attendere…" : "🔗 Collega Google"}
+        </button>
+      </div>
+    {:else}
+      <div class="row">
+        <span><strong>✓ Collegato</strong>{gcalStatus.last_sync ? ` · ultima sync ${new Date(gcalStatus.last_sync * 1000).toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" })}` : ""}{gcalStatus.last_error ? ` · ⚠ ${gcalStatus.last_error}` : ""}</span>
+        <button class="plain danger" onclick={gcalDisconnect}>Scollega</button>
+      </div>
+      <label class="row check">
+        <span>Importazione attiva</span>
+        <input
+          type="checkbox"
+          id="gcal-enabled-check"
+          checked={settings.gcal_enabled}
+          onchange={(e) => update({ gcal_enabled: e.currentTarget.checked })}
+        />
+      </label>
+      {#if settings.gcal_enabled}
+        <div class="row">
+          <span>Finestra temporale</span>
+          <div class="segmented">
+            <button
+              class:on={settings.gcal_sync_weeks === 1}
+              onclick={() => update({ gcal_sync_weeks: 1 })}>1 settimana</button>
+            <button
+              class:on={settings.gcal_sync_weeks === 2}
+              onclick={() => update({ gcal_sync_weeks: 2 })}>2 settimane</button>
+          </div>
+        </div>
+        {#if gcalCalendars.length > 0}
+          <div class="gcal-cals">
+            <span class="gcal-cals-label">Calendari</span>
+            {#each gcalCalendars as cal (cal.id)}
+              <label class="gcal-cal-row">
+                <input
+                  type="checkbox"
+                  checked={settings.gcal_calendar_ids.includes(cal.id)}
+                  onchange={() => toggleCalendar(cal.id)}
+                />
+                <span class="gcal-dot" style:background={cal.color}></span>
+                <span>{cal.summary}</span>
+              </label>
+            {/each}
+          </div>
+        {/if}
+        <div class="row">
+          <span>{gcalSyncResult || "Sincronizza subito gli eventi"}</span>
+          <button
+            id="gcal-sync-btn"
+            class="plain"
+            disabled={gcalSyncing || settings.gcal_calendar_ids.length === 0}
+            onclick={gcalSyncNow}
+          >
+            {gcalSyncing ? "Sync…" : "↻ Sincronizza ora"}
+          </button>
+        </div>
+      {/if}
+    {/if}
 
     <h3>Informazioni</h3>
     <p class="about">
@@ -476,5 +609,39 @@
     border-radius: 8px;
     background: color-mix(in srgb, var(--danger) 15%, transparent);
     color: var(--danger);
+  }
+  .gcal-btn {
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+  .danger {
+    color: var(--danger, #e55);
+    border-color: color-mix(in srgb, var(--danger, #e55) 40%, transparent);
+  }
+  .danger:hover {
+    background: color-mix(in srgb, var(--danger, #e55) 10%, transparent);
+  }
+  .gcal-cals {
+    padding: 6px 0 4px;
+    border-bottom: 1px solid var(--line);
+  }
+  .gcal-cals-label {
+    display: block;
+    margin-bottom: 6px;
+    color: var(--muted);
+    font-size: 12px;
+  }
+  .gcal-cal-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 0;
+    cursor: pointer;
+  }
+  .gcal-dot {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    flex-shrink: 0;
   }
 </style>

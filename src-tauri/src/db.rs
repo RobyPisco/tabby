@@ -24,6 +24,8 @@ pub struct Note {
     /// Fissata in alto nel deck e nell'elenco.
     pub pinned: bool,
     pub folder_id: Option<i64>,
+    /// ID univoco dell'evento Google Calendar; `None` per le note normali.
+    pub gcal_event_id: Option<String>,
 }
 
 /// Promemoria scaduto da notificare.
@@ -57,11 +59,12 @@ pub(crate) fn row_to_note(row: &Row) -> rusqlite::Result<Note> {
         repeat: row.get(9)?,
         pinned: row.get::<_, i64>(10)? != 0,
         folder_id: row.get(11)?,
+        gcal_event_id: row.get(12)?,
     })
 }
 
 pub(crate) const COLUMNS: &str = "id, title, body, color, archived, created_at, updated_at, deleted_at, \
-                       COALESCE(snoozed_until, due_at), repeat, pinned, folder_id";
+                       COALESCE(snoozed_until, due_at), repeat, pinned, folder_id, gcal_event_id";
 /// Ogni nota con il suo eventuale promemoria (al massimo uno per nota).
 pub(crate) const NOTES_JOIN: &str = "notes LEFT JOIN reminders ON reminders.note_id = notes.id";
 /// Scadenza effettiva: il posticipo, se c'è, prende il posto della data originale.
@@ -111,7 +114,13 @@ fn migrate(conn: &Connection) -> rusqlite::Result<()> {
     add_column_if_missing(conn, "deleted_at", "INTEGER")?;
     add_column_if_missing(conn, "pinned", "INTEGER NOT NULL DEFAULT 0")?;
     add_column_if_missing(conn, "folder_id", "INTEGER")?;
+    add_column_if_missing(conn, "gcal_event_id", "TEXT")?;
     crate::organize::create_tables(conn)?;
+    // Indice univoco per gcal_event_id: evita duplicati alla sync.
+    conn.execute_batch(
+        "CREATE UNIQUE INDEX IF NOT EXISTS notes_gcal_event_id
+             ON notes(gcal_event_id) WHERE gcal_event_id IS NOT NULL;",
+    )?;
     // `due_at` è la scadenza della serie; `snoozed_until` un posticipo che non sposta la serie;
     // `fired_at` quando è partita l'ultima notifica, per non ripeterla.
     conn.execute_batch(
@@ -486,6 +495,69 @@ impl Db {
         }
         tx.commit()
     }
+
+    // -- Google Calendar -------------------------------------------------------
+
+    pub fn upsert_gcal_note(
+        &self, gcal_event_id: &str, title: &str, body: &str,
+        color: &str, remind_at: i64, folder_id: i64,
+    ) -> rusqlite::Result<()> {
+        let conn = self.0.lock().unwrap();
+        let t = now();
+        conn.execute(
+            "INSERT INTO notes (title, body, color, folder_id, gcal_event_id, created_at, updated_at) \
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?6) \
+             ON CONFLICT (gcal_event_id) WHERE gcal_event_id IS NOT NULL DO UPDATE SET \
+             title=excluded.title, body=excluded.body, updated_at=?6",
+            params![title, body, color, folder_id, gcal_event_id, t],
+        )?;
+        let note_id: i64 = conn.query_row(
+            "SELECT id FROM notes WHERE gcal_event_id = ?1",
+            [gcal_event_id], |r| r.get(0),
+        )?;
+        conn.execute(
+            "INSERT INTO reminders (note_id, due_at, repeat) VALUES (?1, ?2, 'none') \
+             ON CONFLICT (note_id) DO UPDATE SET              snoozed_until = CASE WHEN due_at <> ?2 THEN NULL ELSE snoozed_until END,              fired_at = CASE WHEN due_at <> ?2 THEN NULL ELSE fired_at END,              due_at = ?2",
+            params![note_id, remind_at],
+        )?;
+        Ok(())
+    }
+
+    pub fn trash_stale_gcal_notes(
+        &self, current_ids: &[String], calendar_ids: &[String],
+    ) -> rusqlite::Result<()> {
+        if calendar_ids.is_empty() { return Ok(()); }
+        let conn = self.0.lock().unwrap();
+        let t = now();
+        let mut stmt = conn.prepare(
+            "SELECT gcal_event_id FROM notes WHERE gcal_event_id IS NOT NULL AND deleted_at IS NULL",
+        )?;
+        let existing: Vec<String> = stmt
+            .query_map([], |r| r.get(0))?
+            .filter_map(|r| r.ok())
+            .filter(|eid: &String| calendar_ids.iter().any(|cid| eid.starts_with(&format!("{cid}_"))))
+            .collect();
+        for eid in existing.iter().filter(|eid| !current_ids.contains(eid)) {
+            conn.execute(
+                "UPDATE notes SET deleted_at = ?1 WHERE gcal_event_id = ?2",
+                params![t, eid],
+            )?;
+        }
+        Ok(())
+    }
+
+    pub fn gcal_folder_id(&self) -> rusqlite::Result<i64> {
+        let conn = self.0.lock().unwrap();
+        match conn.query_row("SELECT id FROM folders WHERE name = 'Calendario Google'", [], |r| r.get(0)) {
+            Ok(id) => Ok(id),
+            Err(rusqlite::Error::QueryReturnedNoRows) => {
+                conn.execute("INSERT INTO folders (name) VALUES ('Calendario Google')", [])?;
+                Ok(conn.last_insert_rowid())
+            }
+            Err(e) => Err(e),
+        }
+    }
+
 }
 
 #[cfg(test)]

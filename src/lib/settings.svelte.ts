@@ -17,6 +17,12 @@ export type Settings = {
   theme: "auto" | "light" | "dark";
   /** Trasparenza del vetro delle schede nel deck, 0-100. */
   deck_transparency: number;
+  /** Integrazione Google Calendar attiva. */
+  gcal_enabled: boolean;
+  /** Quante settimane di eventi importare (1 o 2). */
+  gcal_sync_weeks: 1 | 2;
+  /** ID dei calendari selezionati. */
+  gcal_calendar_ids: string[];
 };
 
 export const FONTS: Record<Settings["editor_font"], { label: string; css: string }> = {
@@ -38,6 +44,9 @@ export const settings = $state<Settings>({
   repeat_minutes: 0,
   theme: "auto",
   deck_transparency: 45,
+  gcal_enabled: false,
+  gcal_sync_weeks: 2,
+  gcal_calendar_ids: [],
 });
 
 /** Larghezza della finestra del deck: deve restare uguale a `dock_width` in settings.rs. */

@@ -719,23 +719,24 @@
           {#if selected.deleted_at === null}
             <ReminderLine note={selected} onaction={reminderAction} />
           {/if}
-          <div class="paper" class:readonly={selected.deleted_at !== null}>
+          <div class="paper" class:readonly={selected.deleted_at !== null || selected.gcal_event_id !== null}>
             <input
               class="title"
               placeholder="Titolo"
               bind:this={titleInput}
               bind:value={selected.title}
               oninput={scheduleSave}
-              readonly={selected.deleted_at !== null}
+              readonly={selected.deleted_at !== null || selected.gcal_event_id !== null}
             />
             <NoteEditor
               bind:this={editor}
               value={selected.body}
               onchange={setBody}
               onopenlink={openLink}
-              readonly={selected.deleted_at !== null}
+              readonly={selected.deleted_at !== null || selected.gcal_event_id !== null}
+              placeholder={selected.gcal_event_id !== null ? "Nessun dettaglio" : undefined}
             />
-            {#if selected.body === "" && selected.deleted_at === null}
+            {#if selected.body === "" && selected.deleted_at === null && selected.gcal_event_id === null}
               <Templates onpick={applyTemplate} />
             {/if}
           </div>
