@@ -82,7 +82,7 @@ Dettagli di progetto e motivazioni in [`PIANO.md`](PIANO.md).
   - Sync ogni 15 min; cartella dedicata "Calendario Google"; finestra 1–2 settimane.
   - Evento rimosso da Calendar → nota nel cestino; nota eliminata/archiviata dall'utente → non torna.
   - Note di sola lettura (deck e "Tutte le note"), con badge, orario dell'evento e "Elimina" nel deck.
-- [ ] App Google ancora in modalità "Testing": solo gli utenti di prova possono collegarsi e il
-  token scade dopo 7 giorni. Per l'uso generale serve la verifica Google (scope sensibile).
+- [x] Client Secret fuori dal repo: variabile di build `TABBY_GOOGLE_CLIENT_SECRET` (secret `GOOGLE_CLIENT_SECRET` nel workflow).
+- [ ] App Google: pubblicata "In produzione" senza verifica (tetto 100 utenti, avviso "app non verificata").
 - [x] Reti con proxy aziendale (PAC + autenticazione NTLM/Negotiate): le chiamate a Google passano da WinHTTP (`http.rs`), che usa proxy di sistema, credenziali di Windows e certificati dell'archivio. Da provare su una rete con proxy.
 - [ ] Calendari deselezionati: le note già importate restano.

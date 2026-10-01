@@ -7,9 +7,9 @@
 //!   4. Ogni evento diventa una nota nella cartella "Calendario Google" con
 //!      promemoria all'orario di inizio; note di eventi rimossi vanno nel cestino.
 //!
-//! # Client ID
-//! Crea un progetto su https://console.cloud.google.com/, abilita "Google Calendar API"
-//! e crea credenziali "App desktop". Compila CLIENT_ID e CLIENT_SECRET qui sotto.
+//! # Credenziali
+//! Progetto su https://console.cloud.google.com/ con "Google Calendar API" abilitata e
+//! credenziali "App desktop". Client ID e secret: vedi le costanti qui sotto.
 
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
 use chrono::{DateTime, Local, TimeDelta, TimeZone, Utc};
@@ -32,10 +32,18 @@ use tauri::{AppHandle, Manager};
 use crate::{db::Db, http, notify_changed_from, settings::SettingsState};
 
 // -- Credenziali OAuth2 -------------------------------------------------------
-// Sostituisci con le credenziali del tuo progetto Google Cloud.
-// Per app desktop il Client Secret NON e' confidenziale (Google lo sa).
-const CLIENT_ID:     &str = "808139008740-6jsdhjvdkog0iakjj1vjv8fkbkpafajp.apps.googleusercontent.com";
-const CLIENT_SECRET: &str = "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";
+// Il Client ID è pubblico. Il Client Secret NON sta nel repository: viene iniettato in
+// compilazione dalla variabile d'ambiente `TABBY_GOOGLE_CLIENT_SECRET` (secret del workflow
+// GitHub, oppure `.cargo/config.toml` in locale, vedi README). Per le app desktop Google
+// non lo considera confidenziale, ma non va comunque pubblicato.
+const CLIENT_ID: &str = "808139008740-6jsdhjvdkog0iakjj1vjv8fkbkpafajp.apps.googleusercontent.com";
+const CLIENT_SECRET: Option<&str> = option_env!("TABBY_GOOGLE_CLIENT_SECRET");
+
+fn client_secret() -> Result<&'static str, String> {
+    CLIENT_SECRET.filter(|s| !s.is_empty()).ok_or_else(|| {
+        "questa build di Tabby non include le credenziali Google (TABBY_GOOGLE_CLIENT_SECRET)".to_string()
+    })
+}
 
 const SCOPES: &str = "https://www.googleapis.com/auth/calendar.readonly";
 const AUTH_URL: &str = "https://accounts.google.com/o/oauth2/v2/auth";
@@ -134,6 +142,7 @@ impl GcalState {
 // -- OAuth2 PKCE --------------------------------------------------------------
 
 pub fn connect(state: &GcalState) -> Result<(), String> {
+    client_secret()?;
     let mut raw = [0u8; 32];
     rand::rng().fill_bytes(&mut raw);
     let verifier = URL_SAFE_NO_PAD.encode(raw);
@@ -213,7 +222,7 @@ fn exchange_code(code: &str, verifier: &str, redirect_uri: &str) -> Result<Token
         TOKEN_URL,
         &[
             ("client_id", CLIENT_ID),
-            ("client_secret", CLIENT_SECRET),
+            ("client_secret", client_secret()?),
             ("code", code),
             ("redirect_uri", redirect_uri),
             ("grant_type", "authorization_code"),
@@ -228,7 +237,7 @@ fn do_refresh_token(refresh_tok: &str) -> Result<Token, String> {
         TOKEN_URL,
         &[
             ("client_id", CLIENT_ID),
-            ("client_secret", CLIENT_SECRET),
+            ("client_secret", client_secret()?),
             ("refresh_token", refresh_tok),
             ("grant_type", "refresh_token"),
         ],
