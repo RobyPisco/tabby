@@ -1,11 +1,14 @@
 use tauri::{
-    menu::{CheckMenuItem, Menu, MenuItem, PredefinedMenuItem},
+    menu::{CheckMenuItem, Menu, MenuItem, PredefinedMenuItem, Submenu},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
     AppHandle,
 };
 use tauri::{Emitter, Manager};
 use tauri_plugin_autostart::ManagerExt;
 
+use crate::db::now;
+use crate::quiet::{self, QuietMenu};
+use crate::settings::SettingsState;
 use crate::{
     capture, new_note_in_deck, set_autostart_enabled, show_settings, toggle_all_notes, toggle_deck,
     AutostartMenuItem,
@@ -33,6 +36,24 @@ pub fn create(app: &AppHandle) -> tauri::Result<()> {
         None::<&str>,
     )?;
     let deck = MenuItem::with_id(app, "deck", "Mostra/nascondi deck\tCtrl+Alt+H", true, None::<&str>)?;
+    let quiet_off = MenuItem::with_id(app, "dnd-off", "Riattiva le notifiche", false, None::<&str>)?;
+    let quiet_menu = Submenu::with_items(
+        app,
+        "Non disturbare",
+        true,
+        &[
+            &MenuItem::with_id(app, "dnd-30", "Per 30 minuti", true, None::<&str>)?,
+            &MenuItem::with_id(app, "dnd-60", "Per 1 ora	Ctrl+Alt+D", true, None::<&str>)?,
+            &MenuItem::with_id(app, "dnd-120", "Per 2 ore", true, None::<&str>)?,
+            &MenuItem::with_id(app, "dnd-morning", "Fino a domattina", true, None::<&str>)?,
+            &PredefinedMenuItem::separator(app)?,
+            &quiet_off,
+        ],
+    )?;
+    app.manage(QuietMenu {
+        submenu: quiet_menu.clone(),
+        off: quiet_off,
+    });
     let settings = MenuItem::with_id(app, "settings", "Impostazioni…", true, None::<&str>)?;
     let autostart = CheckMenuItem::with_id(
         app,
@@ -53,6 +74,7 @@ pub fn create(app: &AppHandle) -> tauri::Result<()> {
             &capture_item,
             &deck,
             &PredefinedMenuItem::separator(app)?,
+            &quiet_menu,
             &settings,
             &autostart,
             &PredefinedMenuItem::separator(app)?,
@@ -71,6 +93,17 @@ pub fn create(app: &AppHandle) -> tauri::Result<()> {
             "capture" => capture::capture_clipboard(app),
             "deck" => toggle_deck(app),
             "settings" => show_settings(app),
+            "dnd-30" | "dnd-60" | "dnd-120" | "dnd-morning" | "dnd-off" => {
+                let id = event.id().as_ref();
+                let until = match id {
+                    "dnd-off" => None,
+                    "dnd-morning" => Some(quiet::until_morning(&app.state::<SettingsState>().get())),
+                    _ => id[4..].parse::<i64>().ok().map(|m| now() + m * 60),
+                };
+                if let Err(e) = quiet::set_dnd(app, until) {
+                    eprintln!("non disturbare: {e}");
+                }
+            }
             "autostart" => {
                 // Il segno di spunta riflette lo stato reale, anche se l'operazione fallisce.
                 let enable = !app.autolaunch().is_enabled().unwrap_or(false);
@@ -97,5 +130,6 @@ pub fn create(app: &AppHandle) -> tauri::Result<()> {
         builder = builder.icon(icon.clone());
     }
     builder.build(app)?;
+    quiet::refresh_tray(app);
     Ok(())
 }

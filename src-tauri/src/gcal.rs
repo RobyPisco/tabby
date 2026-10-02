@@ -317,6 +317,17 @@ pub fn list_calendars(state: &GcalState) -> Result<Vec<GcalCalendar>, String> {
 
 // -- Sync --------------------------------------------------------------------
 
+/// Fine della finestra di importazione: "2w" = tra 2 settimane, "3m" = tra 3 mesi di calendario.
+fn range_end(from: DateTime<Utc>, range: &str) -> DateTime<Utc> {
+    let (count, unit) = range.split_at(range.len().saturating_sub(1));
+    let count: u32 = count.parse().unwrap_or(2);
+    match unit {
+        "m" => from.checked_add_months(chrono::Months::new(count)),
+        _ => from.checked_add_signed(TimeDelta::weeks(count.into())),
+    }
+    .unwrap_or(from + TimeDelta::weeks(2))
+}
+
 pub fn sync(app: &AppHandle) -> Result<usize, String> {
     let state = app.state::<GcalState>();
     let db = app.state::<Db>();
@@ -330,54 +341,57 @@ pub fn sync(app: &AppHandle) -> Result<usize, String> {
     let token = state.access_token()?;
 
     let now_dt: DateTime<Utc> = Utc::now();
-    let weeks = settings.gcal_sync_weeks.clamp(1, 2) as i64;
     let time_min = now_dt.to_rfc3339();
-    let time_max = (now_dt + TimeDelta::weeks(weeks)).to_rfc3339();
+    let time_max = range_end(now_dt, &settings.gcal_sync_range).to_rfc3339();
 
     let mut total = 0usize;
     let mut all_event_ids: Vec<String> = Vec::new();
 
     for cal_id in &settings.gcal_calendar_ids {
         let url = format!("{CALENDAR_API}/calendars/{}/events", urlencoded(cal_id));
-        let resp = get_json(
-            &url,
-            &token,
-            &[
+        // Con intervalli lunghi gli eventi superano una pagina: se ne mancasse una,
+        // quegli eventi finirebbero nel cestino come se fossero stati cancellati.
+        let mut page_token = String::new();
+        loop {
+            let mut params = vec![
                 ("singleEvents", "true"),
                 ("orderBy", "startTime"),
-                ("timeMin", &time_min),
-                ("timeMax", &time_max),
+                ("timeMin", time_min.as_str()),
+                ("timeMax", time_max.as_str()),
                 ("maxResults", "250"),
-            ],
-        )
-        .map_err(|e| format!("errore Calendar per {cal_id}: {e}"))?;
-
-        if let Some(err) = resp["error"]["message"].as_str() {
-            return Err(format!("Google ha risposto per {cal_id}: {err}"));
-        }
-        let items = match resp["items"].as_array() {
-            Some(a) => a,
-            None => continue,
-        };
-
-        for item in items {
-            if item["status"].as_str().unwrap_or("confirmed") == "cancelled" {
-                continue;
+            ];
+            if !page_token.is_empty() {
+                params.push(("pageToken", page_token.as_str()));
             }
-            let event_id = match item["id"].as_str() {
-                Some(id) => id,
-                None => continue,
-            };
-            let gcal_key = format!("{cal_id}_{event_id}");
-            let title = item["summary"].as_str().unwrap_or("(senza titolo)");
-            let body = build_body(item);
-            let start = parse_start(item).unwrap_or_else(|| Utc::now().timestamp());
-            let color = map_gcal_color(item["colorId"].as_str().unwrap_or(""));
+            let resp = get_json(&url, &token, &params)
+                .map_err(|e| format!("errore Calendar per {cal_id}: {e}"))?;
 
-            db.upsert_gcal_note(&gcal_key, title, &body, &color, start, folder_id)
-                .map_err(|e| format!("upsert fallito per {gcal_key}: {e}"))?;
-            all_event_ids.push(gcal_key);
-            total += 1;
+            if let Some(err) = resp["error"]["message"].as_str() {
+                return Err(format!("Google ha risposto per {cal_id}: {err}"));
+            }
+            for item in resp["items"].as_array().into_iter().flatten() {
+                if item["status"].as_str().unwrap_or("confirmed") == "cancelled" {
+                    continue;
+                }
+                let event_id = match item["id"].as_str() {
+                    Some(id) => id,
+                    None => continue,
+                };
+                let gcal_key = format!("{cal_id}_{event_id}");
+                let title = item["summary"].as_str().unwrap_or("(senza titolo)");
+                let body = build_body(item);
+                let start = parse_start(item).unwrap_or_else(|| Utc::now().timestamp());
+                let color = map_gcal_color(item["colorId"].as_str().unwrap_or(""));
+
+                db.upsert_gcal_note(&gcal_key, title, &body, &color, start, folder_id)
+                    .map_err(|e| format!("upsert fallito per {gcal_key}: {e}"))?;
+                all_event_ids.push(gcal_key);
+                total += 1;
+            }
+            match resp["nextPageToken"].as_str() {
+                Some(next) if !next.is_empty() => page_token = next.to_string(),
+                _ => break,
+            }
         }
     }
 
@@ -563,4 +577,19 @@ fn urlencoded(s: &str) -> String {
             _ => format!("%{b:02X}"),
         })
         .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn range_end_weeks_and_months() {
+        let from = Utc.with_ymd_and_hms(2026, 1, 31, 10, 0, 0).unwrap();
+        assert_eq!(range_end(from, "3w"), from + TimeDelta::weeks(3));
+        // Mesi di calendario: dal 31 gennaio, un mese dopo è l'ultimo di febbraio.
+        assert_eq!(range_end(from, "1m"), Utc.with_ymd_and_hms(2026, 2, 28, 10, 0, 0).unwrap());
+        assert_eq!(range_end(from, "3m"), Utc.with_ymd_and_hms(2026, 4, 30, 10, 0, 0).unwrap());
+        assert_eq!(range_end(from, "boh"), from + TimeDelta::weeks(2));
+    }
 }

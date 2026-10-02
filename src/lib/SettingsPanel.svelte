@@ -3,6 +3,7 @@
   import { getVersion } from "@tauri-apps/api/app";
   import { listen } from "@tauri-apps/api/event";
   import { openUrl } from "@tauri-apps/plugin-opener";
+  import { open as openDialog } from "@tauri-apps/plugin-dialog";
   import { onMount } from "svelte";
   import { findUpdate, type Release } from "$lib/updates";
   import { COLOR_NAMES, COLORS, vivid } from "$lib/notes";
@@ -27,6 +28,25 @@
   let gcalConnecting = $state(false);
   let gcalSyncing = $state(false);
   let gcalSyncResult = $state<string>("");
+  // Non disturbare: fine del silenzio in corso (manuale o fascia oraria).
+  let quietUntil = $state<number | null>(null);
+  // Backup
+  type BackupInfo = { name: string; created_at: number; notes: number; media_files: number };
+  let backups = $state<BackupInfo[]>([]);
+  let backupFolder = $state("");
+  let backingUp = $state(false);
+  let backupResult = $state("");
+  let confirmRestore = $state<string | null>(null);
+  let restoring = $state(false);
+
+  const GCAL_RANGES: [string, string][] = [
+    ["1w", "1 settimana"],
+    ["2w", "2 settimane"],
+    ["3w", "3 settimane"],
+    ["1m", "1 mese"],
+    ["2m", "2 mesi"],
+    ["3m", "3 mesi"],
+  ];
 
   const SOUNDS: [string, string][] = [
     ["reminder", "Promemoria"],
@@ -46,6 +66,7 @@
     ["Ctrl+Alt+P", "Nuova nota con promemoria"],
     ["Ctrl+Alt+V", "Salva gli appunti come nota"],
     ["Ctrl+Alt+H", "Mostra/nascondi il deck"],
+    ["Ctrl+Alt+D", "Non disturbare per un'ora / riattiva le notifiche"],
   ];
 
   async function update(changes: Partial<Settings>) {
@@ -113,6 +134,98 @@
     }
   }
 
+  function clock(unix: number): string {
+    return new Date(unix * 1000).toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" });
+  }
+
+  function backupDate(unix: number): string {
+    return new Date(unix * 1000).toLocaleString("it-IT", {
+      weekday: "short",
+      day: "numeric",
+      month: "short",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  }
+
+  // Si ricalcola quando cambia "Non disturbare" (anche dalla tray) o la fascia oraria.
+  $effect(() => {
+    void [settings.dnd_until, settings.quiet_enabled, settings.quiet_from, settings.quiet_to];
+    invoke<number | null>("quiet_until").then((t) => (quietUntil = t));
+  });
+
+  async function setDnd(minutes: number | "morning" | null) {
+    error = "";
+    try {
+      const until =
+        minutes === null
+          ? null
+          : minutes === "morning"
+            ? await invoke<number>("dnd_until_morning")
+            : Math.floor(Date.now() / 1000) + minutes * 60;
+      await invoke("set_dnd", { until });
+    } catch (e) {
+      error = `Non disturbare: ${e}`;
+    }
+  }
+
+  async function loadBackups() {
+    try {
+      backupFolder = await invoke<string>("backup_folder");
+      backups = await invoke<BackupInfo[]>("backup_list");
+    } catch (e) {
+      error = `Backup: ${e}`;
+    }
+  }
+
+  async function backupNow() {
+    backingUp = true;
+    backupResult = "";
+    error = "";
+    try {
+      const info = await invoke<BackupInfo>("backup_now");
+      backupResult = `Fatto: ${info.notes} note salvate`;
+      await loadBackups();
+    } catch (e) {
+      error = `Backup: ${e}`;
+    } finally {
+      backingUp = false;
+    }
+  }
+
+  async function chooseBackupFolder() {
+    const dir = await openDialog({ directory: true, title: "Cartella dei backup (es. su D: o in OneDrive)" });
+    if (typeof dir === "string") {
+      await update({ backup_dir: dir });
+      await loadBackups();
+    }
+  }
+
+  async function defaultBackupFolder() {
+    await update({ backup_dir: null });
+    await loadBackups();
+  }
+
+  /** Primo clic: chiede conferma; secondo clic: ripristina. */
+  async function restore(name: string) {
+    if (confirmRestore !== name) {
+      confirmRestore = name;
+      return;
+    }
+    confirmRestore = null;
+    restoring = true;
+    error = "";
+    try {
+      await invoke("backup_restore", { name });
+      backupResult = "Note ripristinate. Lo stato di prima è in un nuovo backup.";
+      await loadBackups();
+    } catch (e) {
+      error = `Ripristino: ${e}`;
+    } finally {
+      restoring = false;
+    }
+  }
+
   function toggleCalendar(id: string) {
     const ids = settings.gcal_calendar_ids.includes(id)
       ? settings.gcal_calendar_ids.filter((c) => c !== id)
@@ -129,6 +242,7 @@
       .catch(() => {});
     invoke<MonitorInfo[]>("list_monitors").then((list) => (monitors = list));
     invoke<boolean>("get_autostart").then((value) => (autostart = value));
+    loadBackups();
     invoke<GcalStatus>("gcal_status").then((s) => {
       gcalStatus = s;
       if (s.connected) {
@@ -299,10 +413,66 @@
         </select>
       </label>
     {/if}
+    <label class="row">
+      <span>Ora di «Domani» quando posticipo</span>
+      <input
+        type="time"
+        value={settings.tomorrow_time}
+        onchange={(e) => e.currentTarget.value && update({ tomorrow_time: e.currentTarget.value })}
+      />
+    </label>
     <label class="row check">
       <span>Avvia con Windows</span>
       <input type="checkbox" checked={autostart} onchange={toggleAutostart} />
     </label>
+
+    <h3>Non disturbare</h3>
+    <div class="row">
+      <span>
+        {#if quietUntil}
+          <strong>🌙 Notifiche in pausa fino alle {clock(quietUntil)}</strong>
+          <small class="hint block">I promemoria arrivano tutti insieme alla fine.</small>
+        {:else}
+          Metti in pausa le notifiche dei promemoria
+        {/if}
+      </span>
+      <div class="buttons">
+        {#if settings.dnd_until}
+          <button class="plain" onclick={() => setDnd(null)}>Riattiva</button>
+        {:else}
+          <button class="plain" onclick={() => setDnd(60)}>1 ora</button>
+          <button class="plain" onclick={() => setDnd("morning")}>Fino a domattina</button>
+        {/if}
+      </div>
+    </div>
+    <label class="row check">
+      <span>Ogni giorno in una fascia oraria</span>
+      <input
+        type="checkbox"
+        checked={settings.quiet_enabled}
+        onchange={(e) => update({ quiet_enabled: e.currentTarget.checked })}
+      />
+    </label>
+    {#if settings.quiet_enabled}
+      <div class="row">
+        <span>Dalle … alle …</span>
+        <div class="buttons">
+          <input
+            type="time"
+            aria-label="Inizio"
+            value={settings.quiet_from}
+            onchange={(e) => e.currentTarget.value && update({ quiet_from: e.currentTarget.value })}
+          />
+          <span>→</span>
+          <input
+            type="time"
+            aria-label="Fine"
+            value={settings.quiet_to}
+            onchange={(e) => e.currentTarget.value && update({ quiet_to: e.currentTarget.value })}
+          />
+        </div>
+      </div>
+    {/if}
 
     <h3>Scorciatoie</h3>
     <dl>
@@ -320,6 +490,74 @@
       <span>Note, immagini e impostazioni sono salvate sul PC.</span>
       <button class="plain" onclick={() => invoke("open_data_folder")}>Apri la cartella</button>
     </div>
+    <label class="row check">
+      <span>Backup automatico ogni giorno</span>
+      <input
+        type="checkbox"
+        checked={settings.backup_enabled}
+        onchange={(e) => update({ backup_enabled: e.currentTarget.checked })}
+      />
+    </label>
+    <div class="row">
+      <span class="path">
+        Cartella dei backup
+        <small class="hint block" title={backupFolder}>
+          {settings.backup_dir ? backupFolder : "Predefinita (nella cartella dei dati)"}
+        </small>
+      </span>
+      <div class="buttons">
+        {#if settings.backup_dir}
+          <button class="plain" onclick={defaultBackupFolder}>Predefinita</button>
+        {/if}
+        <button class="plain" onclick={chooseBackupFolder}>Cambia…</button>
+      </div>
+    </div>
+    {#if !settings.backup_dir}
+      <p class="hint">
+        Meglio un altro disco o una cartella di OneDrive: se si guasta questo disco, i backup restano al sicuro.
+      </p>
+    {/if}
+    <label class="row">
+      <span>Backup da tenere</span>
+      <select value={settings.backup_keep} onchange={(e) => update({ backup_keep: Number(e.currentTarget.value) })}>
+        {#each [3, 7, 14, 30] as n (n)}
+          <option value={n}>Gli ultimi {n}</option>
+        {/each}
+      </select>
+    </label>
+    <div class="row">
+      <span>
+        {backupResult || (backups[0] ? `Ultimo backup: ${backupDate(backups[0].created_at)}` : "Nessun backup ancora")}
+      </span>
+      <div class="buttons">
+        <button class="plain" onclick={() => invoke("open_backup_folder")}>Apri</button>
+        <button class="plain" disabled={backingUp || restoring} onclick={backupNow}>
+          {backingUp ? "Backup…" : "Esegui ora"}
+        </button>
+      </div>
+    </div>
+    {#if backups.length > 0}
+      <details class="backups">
+        <summary>Ripristina da un backup ({backups.length})</summary>
+        <p class="hint">
+          Le note attuali vengono sostituite da quelle del backup. Prima Tabby salva lo stato attuale in un nuovo
+          backup, così puoi sempre tornare indietro.
+        </p>
+        {#each backups as b (b.name)}
+          <div class="backup-row">
+            <span>{backupDate(b.created_at)} <small>{b.notes} note · {b.media_files} file</small></span>
+            <button
+              class="plain"
+              class:danger={confirmRestore === b.name}
+              disabled={restoring || backingUp}
+              onclick={() => restore(b.name)}
+            >
+              {restoring && confirmRestore === null ? "…" : confirmRestore === b.name ? "Conferma ripristino" : "Ripristina"}
+            </button>
+          </div>
+        {/each}
+      </details>
+    {/if}
 
     <h3>Google Calendar</h3>
     <label class="row check">
@@ -361,17 +599,14 @@
         />
       </label>
       {#if settings.gcal_enabled}
-        <div class="row">
-          <span>Finestra temporale</span>
-          <div class="segmented">
-            <button
-              class:on={settings.gcal_sync_weeks === 1}
-              onclick={() => update({ gcal_sync_weeks: 1 })}>1 settimana</button>
-            <button
-              class:on={settings.gcal_sync_weeks === 2}
-              onclick={() => update({ gcal_sync_weeks: 2 })}>2 settimane</button>
-          </div>
-        </div>
+        <label class="row">
+          <span>Importa gli eventi dei prossimi</span>
+          <select value={settings.gcal_sync_range} onchange={(e) => update({ gcal_sync_range: e.currentTarget.value })}>
+            {#each GCAL_RANGES as [key, label] (key)}
+              <option value={key}>{label}</option>
+            {/each}
+          </select>
+        </label>
         {#if gcalCalendars.length > 0}
           <div class="gcal-cals">
             <span class="gcal-cals-label">Calendari</span>
@@ -526,6 +761,51 @@
     width: 18px;
     height: 18px;
     accent-color: var(--focus);
+  }
+  input[type="time"] {
+    padding: 4px 6px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: var(--pane);
+    color: var(--text);
+    font: inherit;
+  }
+  .buttons {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-shrink: 0;
+  }
+  .hint.block {
+    display: block;
+    margin: 2px 0 0;
+  }
+  .path {
+    min-width: 0;
+  }
+  .path small {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .backups {
+    padding: 6px 0;
+    border-bottom: 1px solid var(--line);
+  }
+  .backups summary {
+    padding: 4px 0;
+    cursor: pointer;
+  }
+  .backup-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 4px 0;
+  }
+  .plain:disabled {
+    opacity: 0.55;
+    cursor: default;
   }
   .sound-pick {
     display: flex;

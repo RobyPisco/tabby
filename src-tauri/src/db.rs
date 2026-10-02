@@ -73,6 +73,9 @@ const EFFECTIVE_DUE: &str = "COALESCE(r.snoozed_until, r.due_at)";
 const PENDING: &str = "n.deleted_at IS NULL AND n.archived = 0 \
                        AND (r.fired_at IS NULL OR r.fired_at < COALESCE(r.snoozed_until, r.due_at))";
 
+/// Quanti giorni prima dell'inizio un evento di Google Calendar compare nel deck.
+const DECK_GCAL_DAYS: i64 = 7;
+
 /// Le note restano nel cestino 30 giorni, poi vengono eliminate all'avvio.
 const TRASH_RETENTION_SECS: i64 = 30 * 24 * 60 * 60;
 
@@ -207,6 +210,27 @@ impl Db {
         Ok(db)
     }
 
+    /// Copia coerente del database in un file nuovo (per i backup), anche mentre l'app scrive.
+    pub fn copy_to(&self, path: &Path) -> rusqlite::Result<()> {
+        let conn = self.0.lock().unwrap();
+        conn.execute("VACUUM INTO ?1", [path.to_string_lossy()])?;
+        Ok(())
+    }
+
+    /// Sostituisce tutto il contenuto con quello di un backup, senza riaprire la connessione.
+    pub fn restore_from(&self, path: &Path) -> rusqlite::Result<()> {
+        let source = Connection::open_with_flags(path, rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY)?;
+        let mut conn = self.0.lock().unwrap();
+        rusqlite::backup::Backup::new(&source, &mut conn)?.run_to_completion(
+            256,
+            std::time::Duration::ZERO,
+            None,
+        )?;
+        // Un backup di una versione precedente potrebbe non avere le colonne più recenti.
+        migrate(&conn)?;
+        create_search_index(&conn)
+    }
+
     /// Alla prima esecuzione mette qualche nota di benvenuto, così il deck non è vuoto.
     fn seed_if_empty(&self) -> rusqlite::Result<()> {
         let conn = self.0.lock().unwrap();
@@ -228,13 +252,17 @@ impl Db {
         Ok(())
     }
 
+    /// Note del deck. Gli eventi di Google Calendar compaiono solo nei `DECK_GCAL_DAYS` giorni
+    /// prima dell'inizio: con mesi di calendario il deck sarebbe pieno di linguette.
+    /// Gli altri restano in "Tutte le note".
     pub fn list_active(&self) -> rusqlite::Result<Vec<Note>> {
         let conn = self.0.lock().unwrap();
         let mut stmt = conn.prepare(&format!(
             "SELECT {COLUMNS} FROM {NOTES_JOIN} WHERE archived = 0 AND deleted_at IS NULL
+                 AND (gcal_event_id IS NULL OR reminders.due_at IS NULL OR reminders.due_at <= ?1)
              ORDER BY pinned DESC, id ASC"
         ))?;
-        let rows = stmt.query_map([], row_to_note)?;
+        let rows = stmt.query_map([now() + DECK_GCAL_DAYS * 24 * 60 * 60], row_to_note)?;
         rows.collect()
     }
 
@@ -684,5 +712,40 @@ mod tests {
         db.set_pinned(pinned.id, true).unwrap();
         assert_eq!(db.list_active().unwrap()[0].id, pinned.id);
         assert_eq!(db.search("", Filter::All, None, None).unwrap()[0].id, pinned.id);
+    }
+
+    #[test]
+    fn backup_copy_restores_notes_and_search() {
+        let dir = std::env::temp_dir().join(format!("tabby-db-backup-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let copy = dir.join("notes.db");
+
+        let db = db();
+        let note = db.create_full("Bollette", "pagare la luce", "#b5d3f7").unwrap();
+        db.copy_to(&copy).unwrap();
+        db.delete(&[note.id]).unwrap();
+        db.create_full("Dopo il backup", "", "#b5d3f7").unwrap();
+
+        db.restore_from(&copy).unwrap();
+        let titles: Vec<String> = db.list_active().unwrap().into_iter().map(|n| n.title).collect();
+        assert!(titles.contains(&"Bollette".to_string()));
+        assert!(!titles.contains(&"Dopo il backup".to_string()));
+        assert_eq!(db.search("luce", Filter::All, None, None).unwrap().len(), 1);
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn deck_shows_only_upcoming_calendar_events() {
+        let db = db();
+        let folder = db.gcal_folder_id().unwrap();
+        let t = now();
+        db.upsert_gcal_note("cal_vicino", "Dentista", "", "#b5d3f7", t + 2 * 86_400, folder).unwrap();
+        db.upsert_gcal_note("cal_lontano", "Ferie", "", "#b5d3f7", t + 40 * 86_400, folder).unwrap();
+        let deck: Vec<String> = db.list_active().unwrap().into_iter().map(|n| n.title).collect();
+        assert!(deck.contains(&"Dentista".to_string()));
+        assert!(!deck.contains(&"Ferie".to_string()));
+        // In "Tutte le note" c'è anche l'evento lontano.
+        assert_eq!(db.search("ferie", Filter::Active, None, None).unwrap().len(), 1);
     }
 }

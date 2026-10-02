@@ -9,6 +9,8 @@
   import NoteEditor from "$lib/NoteEditor.svelte";
   import ReminderLine from "$lib/ReminderLine.svelte";
   import ReminderPicker from "$lib/ReminderPicker.svelte";
+  import TimerButton from "$lib/TimerButton.svelte";
+  import { initTimer } from "$lib/timer.svelte";
   import SettingsPanel from "$lib/SettingsPanel.svelte";
   import { colorForNewNote, initSettings, settings } from "$lib/settings.svelte";
   import Sidebar from "$lib/Sidebar.svelte";
@@ -230,6 +232,12 @@
     await reload();
   }
 
+  async function snoozeUntil(until: number) {
+    if (!selected) return;
+    await invoke("snooze_reminder", { noteId: selected.id, until });
+    await reload();
+  }
+
   async function togglePin() {
     if (!selected) return;
     await invoke("set_pinned", { id: selected.id, pinned: !selected.pinned });
@@ -436,6 +444,7 @@
     // Link dal deck a una nota archiviata.
     const unlistenSelect = listen<number>("select-note", ({ payload }) => showNote(payload));
     const settingsReady = initSettings();
+    const timerReady = initTimer();
     const unlistenSettings = listen("open-settings", () => (showSettings = true));
     const media = window.matchMedia("(prefers-color-scheme: dark)");
     const onScheme = (e: MediaQueryListEvent) => (systemDark = e.matches);
@@ -451,6 +460,7 @@
       unlistenSelect.then((fn) => fn());
       unlistenSettings.then((fn) => fn());
       settingsReady.then((fn) => fn());
+      timerReady.then((fn) => fn());
       media.removeEventListener("change", onScheme);
       flushSave();
     };
@@ -693,6 +703,7 @@
                     <path d="M3.5 10a6.5 6.5 0 1 0 1.9-4.6M3.5 3.5v2.4h2.4M10 6.5V10l2.5 1.8" />
                   </svg>
                 </button>
+                <TimerButton noteId={selected.id} />
                 <ReminderPicker
                   remindAt={selected.remind_at}
                   repeat={selected.repeat}
@@ -717,7 +728,7 @@
             </div>
           </header>
           {#if selected.deleted_at === null}
-            <ReminderLine note={selected} onaction={reminderAction} />
+            <ReminderLine note={selected} onaction={reminderAction} onsnooze={snoozeUntil} />
           {/if}
           <div class="paper" class:readonly={selected.deleted_at !== null || selected.gcal_event_id !== null}>
             <input

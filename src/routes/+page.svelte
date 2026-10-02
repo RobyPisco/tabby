@@ -10,6 +10,8 @@
   import ReminderLine from "$lib/ReminderLine.svelte";
   import ReminderPicker from "$lib/ReminderPicker.svelte";
   import Templates from "$lib/Templates.svelte";
+  import TimerButton from "$lib/TimerButton.svelte";
+  import { formatLeft, initTimer, timer } from "$lib/timer.svelte";
   import {
     isOverdue,
     onNotesChangedElsewhere,
@@ -39,6 +41,9 @@
   let editing = $state(false);
   let titleInput = $state<HTMLInputElement>();
   let reminderOpen = $state(false);
+  let snoozeOpen = $state(false);
+  /** Clic su "⋯ Altro" in una notifica: la scelta del posticipo si apre quando la nota è aperta. */
+  let snoozeFor: number | null = null;
   let editor = $state<NoteEditor>();
   /** Aperta da una notifica: resta aperta finché il cursore non passa sul deck. */
   let sticky = false;
@@ -124,6 +129,7 @@
     editing = false;
     sticky = false;
     reminderOpen = false;
+    snoozeOpen = false;
     setPhase("rest");
   }
 
@@ -140,6 +146,7 @@
   onMount(() => {
     reload();
     const settingsReady = initSettings();
+    const timerReady = initTimer();
     const unlistenChanges = onNotesChangedElsewhere(reload);
     // Ctrl+Alt+N / Ctrl+Alt+P o menu della tray; il payload dice se aprire subito il promemoria.
     const unlistenNewNote = listen<boolean>("new-note", ({ payload }) => addNote(payload));
@@ -148,7 +155,20 @@
       await reload();
       if (!notes.some((n) => n.id === payload)) return;
       sticky = true;
-      openNoteById(payload);
+      await openNoteById(payload);
+      if (snoozeFor === payload) {
+        snoozeFor = null;
+        await tick();
+        snoozeOpen = true;
+      }
+    });
+    const unlistenSnooze = listen<number>("snooze-picker", async ({ payload }) => {
+      if (openId === payload) {
+        await tick();
+        snoozeOpen = true;
+      } else {
+        snoozeFor = payload;
+      }
     });
 
     const unlisten = listen<{ x: number; y: number; height: number }>("cursor", ({ payload }) => {
@@ -172,6 +192,8 @@
       unlistenNewNote.then((fn) => fn());
       unlistenOpenNote.then((fn) => fn());
       settingsReady.then((fn) => fn());
+      timerReady.then((fn) => fn());
+      unlistenSnooze.then((fn) => fn());
     };
   });
 
@@ -179,6 +201,7 @@
     await flushSave();
     openId = id;
     reminderOpen = false;
+    snoozeOpen = false;
     setPhase("open");
   }
 
@@ -292,6 +315,12 @@
     await reload();
   }
 
+  async function snoozeUntil(until: number) {
+    if (!openNote) return;
+    await invoke("snooze_reminder", { noteId: openNote.id, until });
+    await reload();
+  }
+
   function setColor(color: string) {
     if (!openNote) return;
     openNote.color = color;
@@ -345,7 +374,11 @@
   <!-- Pillola a riposo -->
   <div class="pill" class:hidden={phase !== "rest"} style:top="{deckTop + deckHeight / 2}px">
     {#each notes as note (note.id)}
-      <span style:--c={vivid(note.color)} class:due={isOverdue(note, clock.now)}></span>
+      <span
+        style:--c={vivid(note.color)}
+        class:due={isOverdue(note, clock.now)}
+        class:timing={timer.current?.note_id === note.id}
+      ></span>
     {/each}
   </div>
 
@@ -369,6 +402,9 @@
         <span class="label">{note.title || "Senza titolo"}</span>
         {#if note.pinned}
           <svg class="tab-pin" viewBox="0 0 20 20" aria-hidden="true"><path d="M7.5 2.5h5l-.8 4.2 2.8 2.8v1.5H5.5V9.5l2.8-2.8-.8-4.2ZM10 11v6.5" /></svg>
+        {/if}
+        {#if timer.current?.note_id === note.id}
+          <span class="tab-timer" class:pause={timer.current.kind === "break"}>{formatLeft(timer.left)}</span>
         {/if}
         {#if note.remind_at !== null}
           <svg class="tab-bell" viewBox="0 0 20 20" aria-hidden="true">
@@ -438,6 +474,7 @@
           >
             <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M7.5 2.5h5l-.8 4.2 2.8 2.8v1.5H5.5V9.5l2.8-2.8-.8-4.2ZM10 11v6.5" /></svg>
           </button>
+          <TimerButton noteId={openNote.id} />
           <ReminderPicker
             remindAt={openNote.remind_at}
             repeat={openNote.repeat}
@@ -454,7 +491,7 @@
             <button class="gcal-trash" onclick={trashOpen} title="Sposta nel cestino">Elimina</button>
           </div>
         {/if}
-        <ReminderLine note={openNote} onaction={reminderAction} />
+        <ReminderLine note={openNote} onaction={reminderAction} onsnooze={snoozeUntil} bind:snoozeOpen />
         <NoteEditor
           bind:this={editor}
           value={openNote.body}
@@ -638,6 +675,32 @@
   }
   .tab.due .tab-bell {
     fill: #ff6b5e;
+  }
+  /* Timer in corso: minuti rimasti sulla linguetta, e la barra della pillola respira. */
+  .tab-timer {
+    flex: none;
+    padding: 1px 5px;
+    border-radius: 6px;
+    background: #d9482b;
+    font-size: 11px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+  }
+  .tab-timer.pause {
+    background: #2b8a5a;
+  }
+  .stage.left .tab-timer {
+    transform: scaleX(-1);
+  }
+  .pill span.timing {
+    animation: timing 2.4s ease-in-out infinite;
+  }
+  @keyframes timing {
+    50% {
+      box-shadow:
+        0 0 0 1px rgba(255, 255, 255, 0.6),
+        0 0 16px var(--c);
+    }
   }
 
   .add {

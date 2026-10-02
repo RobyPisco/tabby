@@ -90,3 +90,15 @@ pub fn simple(
         eprintln!("notifica non mostrata: {e:?}");
     }
 }
+
+/// Notifica muta di conferma (es. "Non disturbare" acceso dalla scorciatoia).
+pub fn silent(app: &AppHandle, title: &str, text: &str) {
+    let result = with_icon(Toast::new(&app_id(app)))
+        .title(title)
+        .text1(text)
+        .sound(None)
+        .show();
+    if let Err(e) = result {
+        eprintln!("notifica non mostrata: {e:?}");
+    }
+}

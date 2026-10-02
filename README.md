@@ -26,8 +26,11 @@ L'installer non è ancora firmato: se Windows mostra "App non riconosciuta", sce
 - **Deck sul bordo** destro o sinistro, sempre in primo piano e trasparente ai clic a riposo; note fissate in cima; si riposiziona da solo se cambiano monitor, risoluzione o scala.
 - **Editor Markdown dal vivo**: caselle da spuntare, titoli, grassetto/corsivo, immagini e allegati incollati o trascinati, link web, link tra note `[[titolo]]` e tag `#parola`; modelli rapidi.
 - **Tutte le note**: ricerca full-text (anche senza accenti), filtri, cartelle, tag, selezione multipla, cestino, cronologia delle versioni, "Citata in".
-- **Promemoria** con ricorrenza, notifiche di Windows con *10 min / 1 ora / Domani / Fatto*, date scritte a parole ("domani alle 9").
-- **Google Calendar** (facoltativo): gli eventi dei prossimi 7-14 giorni diventano note in sola lettura con promemoria; Tabby chiede solo la lettura del calendario e, se lo attivi, funziona anche dietro proxy aziendali (PAC, autenticazione di Windows).
+- **Promemoria** con ricorrenza, notifiche di Windows con *10 min / 1 ora / Domani / Fatto / Altro*, date scritte a parole ("domani alle 9"); posticipo a un orario a scelta e ora di "Domani" configurabile.
+- **Non disturbare**: per 30 minuti, 1-2 ore, fino a domattina o in una fascia oraria fissa (es. 22-8); i promemoria arrivano tutti insieme alla fine.
+- **Timer / pomodoro** su una nota: 25 min di concentrazione, pausa, durata a scelta; il tempo rimasto appare sulla linguetta e alla fine arriva una notifica con "Pausa" / "Altri 25 min".
+- **Backup automatico** giornaliero di note, immagini e impostazioni in una cartella a scelta (meglio su un altro disco o in OneDrive), con ripristino dalle impostazioni.
+- **Google Calendar** (facoltativo): gli eventi da 1 settimana fino a 3 mesi avanti diventano note in sola lettura con promemoria; Tabby chiede solo la lettura del calendario e, se lo attivi, funziona anche dietro proxy aziendali (PAC, autenticazione di Windows).
 - **Cattura rapida** degli appunti, **export** (Markdown/testo, un file per nota o file unico) e **import**.
 - **Impostazioni**: bordo, larghezza, schermo, carattere, colore delle note nuove, suono, tema, avvio con Windows.
 
@@ -40,6 +43,7 @@ L'installer non è ancora firmato: se Windows mostra "App non riconosciuta", sce
 | `Ctrl+Alt+P` | Nuova nota con promemoria |
 | `Ctrl+Alt+V` | Salva gli appunti come nota |
 | `Ctrl+Alt+H` | Mostra/nascondi il deck |
+| `Ctrl+Alt+D` | Non disturbare per un'ora / riattiva le notifiche |
 | `Ctrl+L` / `Ctrl+Invio` | Casella da spuntare / spunta la riga |
 | `Ctrl+B` / `Ctrl+I` / `Ctrl+Shift+X` | Grassetto / corsivo / barrato |
 | `Ctrl+F`, `Ctrl+N`, `Esc` | Ricerca, nuova nota, chiudi (in "Tutte le note") |
@@ -59,6 +63,8 @@ Maggiori dettagli nell'[informativa sulla privacy](PRIVACY.md).
 ## Dati
 
 Tutto resta sul PC, in `%APPDATA%\it.pisco.tabby\` (o nella cartella indicata da `TABBY_DATA_DIR`, utile per le prove): `notes.db` (SQLite), `media\` (immagini e allegati), `settings.json`. Dalle impostazioni c'è "Apri la cartella".
+
+**Backup**: una volta al giorno Tabby copia database, immagini e impostazioni in una cartella `tabby-AAAA-MM-GG_HHMMSS` (di default in `backups\` dentro la cartella dei dati, oppure dove scegli nelle impostazioni) e tiene gli ultimi 7. Le immagini uguali al backup precedente sono collegamenti fisici, quindi non occupano spazio due volte. Il token di Google non viene copiato. "Ripristina" sostituisce le note con quelle del backup, dopo aver salvato lo stato attuale in un nuovo backup.
 
 ## Sviluppo (Windows 11)
 

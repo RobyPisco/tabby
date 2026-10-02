@@ -19,12 +19,25 @@ export type Settings = {
   deck_transparency: number;
   /** Integrazione Google Calendar attiva. */
   gcal_enabled: boolean;
-  /** Quante settimane di eventi importare (1 o 2). */
-  gcal_sync_weeks: 1 | 2;
+  /** Quanto avanti importare gli eventi: "1w"-"3w" settimane, "1m"-"3m" mesi. */
+  gcal_sync_range: string;
   /** ID dei calendari selezionati. */
   gcal_calendar_ids: string[];
   /** Usa il proxy di Windows (PAC, credenziali dell'utente) per le chiamate a Google. */
   gcal_use_proxy: boolean;
+  /** Backup automatico giornaliero. */
+  backup_enabled: boolean;
+  /** Cartella dei backup; `null` = `backups` nella cartella dei dati. */
+  backup_dir: string | null;
+  backup_keep: number;
+  /** "Non disturbare" fino a questo momento (secondi Unix). */
+  dnd_until: number | null;
+  /** Fascia oraria senza notifiche ("HH:MM"). */
+  quiet_enabled: boolean;
+  quiet_from: string;
+  quiet_to: string;
+  /** Ora di "Domani" quando si posticipa ("HH:MM"). */
+  tomorrow_time: string;
 };
 
 export const FONTS: Record<Settings["editor_font"], { label: string; css: string }> = {
@@ -47,10 +60,24 @@ export const settings = $state<Settings>({
   theme: "auto",
   deck_transparency: 45,
   gcal_enabled: false,
-  gcal_sync_weeks: 2,
+  gcal_sync_range: "2w",
   gcal_calendar_ids: [],
   gcal_use_proxy: false,
+  backup_enabled: true,
+  backup_dir: null,
+  backup_keep: 7,
+  dnd_until: null,
+  quiet_enabled: false,
+  quiet_from: "22:00",
+  quiet_to: "08:00",
+  tomorrow_time: "09:00",
 });
+
+/** "09:00" → ore e minuti. */
+export function splitTime(text: string): [number, number] {
+  const [h, m] = text.split(":").map(Number);
+  return [h || 0, m || 0];
+}
 
 /** Larghezza della finestra del deck: deve restare uguale a `dock_width` in settings.rs. */
 export function dockWidth(s: Settings = settings): number {

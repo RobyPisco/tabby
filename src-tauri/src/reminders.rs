@@ -22,8 +22,6 @@ use crate::toast::{app_id, sound, with_icon};
 const MAX_SLEEP_SECS: i64 = 30;
 /// Oltre questo numero di promemoria scaduti insieme (es. all'avvio) si mostra un riepilogo.
 const MAX_SEPARATE_TOASTS: usize = 3;
-/// Ora a cui scatta "Domani" quando si posticipa.
-const TOMORROW_HOUR: u32 = 9;
 
 /// Oltre questo tempo dalla scadenza un promemoria ignorato non viene più ripetuto.
 const REPEAT_GIVE_UP_SECS: i64 = 24 * 60 * 60;
@@ -44,12 +42,19 @@ pub fn start(app: &AppHandle) -> Scheduler {
     let (tx, rx) = channel();
     let app = app.clone();
     thread::spawn(move || loop {
-        fire_due(&app);
-        repeat_unhandled(&app);
-        let db = app.state::<Db>();
-        let wait = match db.next_pending_due() {
-            Ok(Some(due)) => (due - now()).clamp(1, MAX_SLEEP_SECS),
-            _ => MAX_SLEEP_SECS,
+        crate::quiet::refresh_tray(&app);
+        // In "Non disturbare" i promemoria aspettano: alla fine partono tutti insieme
+        // (oltre `MAX_SEPARATE_TOASTS` in un'unica notifica di riepilogo).
+        let wait = if crate::quiet::is_quiet(&app) {
+            LAST_ALERT.lock().unwrap().clear();
+            MAX_SLEEP_SECS
+        } else {
+            fire_due(&app);
+            repeat_unhandled(&app);
+            match app.state::<Db>().next_pending_due() {
+                Ok(Some(due)) => (due - now()).clamp(1, MAX_SLEEP_SECS),
+                _ => MAX_SLEEP_SECS,
+            }
         };
         if let Err(RecvTimeoutError::Disconnected) = rx.recv_timeout(Duration::from_secs(wait as u64)) {
             break;
@@ -137,6 +142,7 @@ fn show_toast(app: &AppHandle, reminder: &DueReminder) {
         .add_button("🕐 1 ora", "snooze60")
         .add_button("🌅 Domani", "tomorrow")
         .add_button("✓ Fatto", "done")
+        .add_button("⋯ Altro", "custom")
         .on_activated(move |action| {
             // Clic sul corpo della notifica: nessuna azione, si apre la nota.
             apply_action(&handle, note_id, action.as_deref().unwrap_or("open"));
@@ -176,18 +182,25 @@ fn show_summary_toast(app: &AppHandle, count: usize) {
     }
 }
 
-/// Azioni dalla notifica o dall'interfaccia: "snooze10", "snooze60", "tomorrow", "done", "open".
+/// Azioni dalla notifica o dall'interfaccia: "snooze10", "snooze60", "tomorrow", "done", "open",
+/// "custom" (apre la nota con la scelta dell'orario del posticipo).
 pub fn apply_action(app: &AppHandle, note_id: i64, action: &str) {
     let db = app.state::<Db>();
     let t = now();
     let result = match action {
         "snooze10" => db.snooze_reminder(note_id, t + 10 * 60),
         "snooze60" => db.snooze_reminder(note_id, t + 60 * 60),
-        "tomorrow" => db.snooze_reminder(note_id, tomorrow_at(TOMORROW_HOUR).unwrap_or(t + 86_400)),
+        "tomorrow" => {
+            let time = app.state::<SettingsState>().get().tomorrow_time;
+            db.snooze_reminder(note_id, tomorrow_at(&time).unwrap_or(t + 86_400))
+        }
         "done" => complete(&db, note_id, t),
-        "open" => {
+        "open" | "custom" => {
             LAST_ALERT.lock().unwrap().insert(note_id, i64::MAX);
             open_note_in_deck(app, note_id);
+            if action == "custom" {
+                let _ = app.emit_to("main", "snooze-picker", note_id);
+            }
             return;
         }
         _ => return,
@@ -197,6 +210,14 @@ pub fn apply_action(app: &AppHandle, note_id: i64, action: &str) {
     }
     app.state::<Scheduler>().wake();
     notify_changed_from(app, "scheduler");
+}
+
+/// Posticipa a un momento scelto dall'utente; la serie dei ricorrenti non si sposta.
+pub fn snooze_until(app: &AppHandle, note_id: i64, until: i64) -> Result<(), String> {
+    app.state::<Db>().snooze_reminder(note_id, until).map_err(|e| e.to_string())?;
+    app.state::<Scheduler>().wake();
+    notify_changed_from(app, "scheduler");
+    Ok(())
 }
 
 /// "Fatto": un promemoria singolo sparisce, uno ricorrente passa alla prossima scadenza futura.
@@ -235,9 +256,10 @@ fn nth(base: NaiveDateTime, repeat: &str, k: u32) -> Option<NaiveDateTime> {
     }
 }
 
-fn tomorrow_at(hour: u32) -> Option<i64> {
+/// Domani all'ora "HH:MM" scelta nelle impostazioni.
+fn tomorrow_at(time: &str) -> Option<i64> {
     let date = Local::now().date_naive().succ_opt()?;
-    let time = NaiveTime::from_hms_opt(hour, 0, 0)?;
+    let time: NaiveTime = crate::settings::parse_time(time)?;
     Some(Local.from_local_datetime(&date.and_time(time)).earliest()?.timestamp())
 }
 

@@ -11,10 +11,14 @@ pub const SOUNDS: [&str; 9] = [
     "reminder", "default", "im", "mail", "sms", "alarm", "alarm2", "call", "call2",
 ];
 
+/// Intervalli di importazione di Google Calendar: settimane ("2w") o mesi ("3m").
+pub const GCAL_RANGES: [&str; 6] = ["1w", "2w", "3w", "1m", "2m", "3m"];
+
 const REPEAT_MINUTES_MAX: u32 = 120;
 const NOTE_WIDTH_RANGE: (u32, u32) = (280, 520);
 const EDITOR_SIZE_RANGE: (u32, u32) = (13, 24);
 const DECK_TRANSPARENCY_MAX: u32 = 100;
+const BACKUP_KEEP_RANGE: (u32, u32) = (1, 60);
 
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(default)]
@@ -42,12 +46,26 @@ pub struct Settings {
     pub deck_transparency: u32,
     /// Integrazione Google Calendar attiva.
     pub gcal_enabled: bool,
-    /// Quante settimane di eventi importare (1 o 2).
-    pub gcal_sync_weeks: u32,
+    /// Quanto avanti importare gli eventi: una delle chiavi di `GCAL_RANGES`.
+    pub gcal_sync_range: String,
     /// ID dei calendari Google selezionati dall'utente.
     pub gcal_calendar_ids: Vec<String>,
     /// Usa il proxy di Windows (PAC, credenziali dell'utente) per le chiamate a Google.
     pub gcal_use_proxy: bool,
+    /// Backup automatico giornaliero di note e immagini.
+    pub backup_enabled: bool,
+    /// Cartella dei backup; `None` = `backups` nella cartella dei dati.
+    pub backup_dir: Option<String>,
+    /// Quanti backup tenere: i più vecchi vengono cancellati.
+    pub backup_keep: u32,
+    /// "Non disturbare" fino a questo momento (secondi Unix); `None` = spento.
+    pub dnd_until: Option<i64>,
+    /// Fascia oraria fissa senza notifiche, da `quiet_from` a `quiet_to` ("HH:MM", anche a cavallo della mezzanotte).
+    pub quiet_enabled: bool,
+    pub quiet_from: String,
+    pub quiet_to: String,
+    /// Ora a cui scatta "Domani" quando si posticipa un promemoria ("HH:MM").
+    pub tomorrow_time: String,
 }
 
 impl Default for Settings {
@@ -65,11 +83,29 @@ impl Default for Settings {
             theme: "auto".into(),
             deck_transparency: 45,
             gcal_enabled: false,
-            gcal_sync_weeks: 2,
+            gcal_sync_range: "2w".into(),
             gcal_calendar_ids: vec![],
             gcal_use_proxy: false,
+            backup_enabled: true,
+            backup_dir: None,
+            backup_keep: 7,
+            dnd_until: None,
+            quiet_enabled: false,
+            quiet_from: "22:00".into(),
+            quiet_to: "08:00".into(),
+            tomorrow_time: "09:00".into(),
         }
     }
+}
+
+/// "HH:MM" con due cifre per l'ora (come `<input type="time">`), altrimenti il valore predefinito.
+fn time_or(value: String, fallback: &str) -> String {
+    parse_time(&value).map_or_else(|| fallback.into(), |t| t.format("%H:%M").to_string())
+}
+
+/// Ore e minuti da "HH:MM".
+pub fn parse_time(text: &str) -> Option<chrono::NaiveTime> {
+    chrono::NaiveTime::parse_from_str(text.trim(), "%H:%M").ok()
 }
 
 fn one_of(value: String, allowed: &[&str], fallback: &str) -> String {
@@ -101,9 +137,17 @@ impl Settings {
             theme: one_of(self.theme, &["auto", "light", "dark"], &default.theme),
             deck_transparency: self.deck_transparency.min(DECK_TRANSPARENCY_MAX),
             gcal_enabled: self.gcal_enabled,
-            gcal_sync_weeks: self.gcal_sync_weeks.clamp(1, 2),
+            gcal_sync_range: one_of(self.gcal_sync_range, &GCAL_RANGES, &default.gcal_sync_range),
             gcal_calendar_ids: self.gcal_calendar_ids,
             gcal_use_proxy: self.gcal_use_proxy,
+            backup_enabled: self.backup_enabled,
+            backup_dir: self.backup_dir.filter(|d| !d.trim().is_empty()),
+            backup_keep: self.backup_keep.clamp(BACKUP_KEEP_RANGE.0, BACKUP_KEEP_RANGE.1),
+            dnd_until: self.dnd_until.filter(|t| *t > crate::db::now()),
+            quiet_enabled: self.quiet_enabled,
+            quiet_from: time_or(self.quiet_from, &default.quiet_from),
+            quiet_to: time_or(self.quiet_to, &default.quiet_to),
+            tomorrow_time: time_or(self.tomorrow_time, &default.tomorrow_time),
         }
     }
 
@@ -165,6 +209,12 @@ fn parse(text: &str) -> Option<Settings> {
     if obj.contains_key("gcal_enabled") && !obj.contains_key("gcal_use_proxy") {
         obj.insert("gcal_use_proxy".into(), true.into());
     }
+    // Fino alla 1.3 l'intervallo era un numero di settimane (1 o 2).
+    if let Some(weeks) = obj.get("gcal_sync_weeks").and_then(|w| w.as_u64()) {
+        if !obj.contains_key("gcal_sync_range") {
+            obj.insert("gcal_sync_range".into(), format!("{weeks}w").into());
+        }
+    }
     serde_json::from_value(json).ok()
 }
 
@@ -191,6 +241,24 @@ mod tests {
     }
 
     #[test]
+    fn invalid_times_fall_back() {
+        let s = Settings {
+            quiet_from: "25:00".into(),
+            quiet_to: "7:30".into(),
+            tomorrow_time: "domani".into(),
+            backup_keep: 0,
+            dnd_until: Some(1),
+            ..Settings::default()
+        }
+        .sanitized();
+        assert_eq!(s.quiet_from, "22:00");
+        assert_eq!(s.quiet_to, "07:30");
+        assert_eq!(s.tomorrow_time, "09:00");
+        assert_eq!(s.backup_keep, 1);
+        assert_eq!(s.dnd_until, None);
+    }
+
+    #[test]
     fn partial_file_uses_defaults() {
         let s: Settings = serde_json::from_str(r#"{ "side": "left" }"#).unwrap();
         assert_eq!(s.side, "left");
@@ -206,5 +274,13 @@ mod tests {
         assert!(parse(r#"{ "gcal_enabled": true }"#).unwrap().gcal_use_proxy);
         // Scelta esplicita dell'utente: si rispetta.
         assert!(!parse(r#"{ "gcal_enabled": true, "gcal_use_proxy": false }"#).unwrap().gcal_use_proxy);
+    }
+
+    #[test]
+    fn old_week_count_becomes_range() {
+        assert_eq!(parse(r#"{ "gcal_sync_weeks": 1 }"#).unwrap().gcal_sync_range, "1w");
+        assert_eq!(parse("{}").unwrap().gcal_sync_range, "2w");
+        let s = Settings { gcal_sync_range: "6m".into(), ..Settings::default() }.sanitized();
+        assert_eq!(s.gcal_sync_range, "2w");
     }
 }

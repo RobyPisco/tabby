@@ -67,11 +67,19 @@ Dettagli di progetto e motivazioni in [`PIANO.md`](PIANO.md).
 - [ ] Prova sul portatile di casa.
 - [x] Test: `cargo test` (strato dati, promemoria e ricorrenze, tag, link, export, impostazioni, cattura) e `npm test` (date a parole).
 
+## 7b. Versione 1.4
+- [x] Backup automatico giornaliero (database con `VACUUM INTO`, immagini con hard link al backup precedente, impostazioni) in cartella a scelta, ultimi N; "Esegui ora" e ripristino con backup di sicurezza (`backup.rs`).
+- [x] Non disturbare: 30 min / 1 ora / 2 ore / fino a domattina dalla tray, `Ctrl+Alt+D`, fascia oraria fissa; i promemoria restano in attesa e partono alla fine (`quiet.rs`).
+- [x] Posticipo a un orario a scelta (pulsante ⋯ nella barra "Scaduto" e "⋯ Altro" nella notifica); ora di "Domani" nelle impostazioni.
+- [x] Timer / pomodoro legato a una nota, uno alla volta (`timer.rs`): tempo sulla linguetta, notifica con Pausa / Altri N min.
+- [x] Google Calendar: intervallo da 1 settimana a 3 mesi, con paginazione delle risposte.
+- [ ] Da provare a mano: notifiche con 5 pulsanti, timer fino alla fine, Non disturbare dalla tray, backup su altro disco e ripristino.
+- [ ] Con 2-3 mesi di calendario il deck si riempie di eventi: valutare di mostrare nel deck solo quelli dei prossimi giorni.
+
 ## 8. Idee per dopo
-- [ ] Backup automatico su D: o su cartella cloud; sync via OneDrive/Drive (anche una cartella di file `.md` sincronizzabile).
+- [ ] Sync via OneDrive/Drive (anche una cartella di file `.md` sincronizzabile).
 - [ ] Blocco con PIN e cifratura AES-GCM per singole note.
 - [ ] Note che compaiono in base all'app in primo piano (es. Mixing Station).
-- [ ] Timer/pomodoro legato a una nota.
 - [ ] Dettatura vocale (`Win+H`) o trascrizione locale con Whisper.
 - [ ] Riassunto o riscrittura di una nota con Claude (chiave API).
 

@@ -1,3 +1,4 @@
+mod backup;
 mod capture;
 mod db;
 mod dock;
@@ -6,8 +7,10 @@ mod gcal;
 mod http;
 mod media;
 mod organize;
+mod quiet;
 mod reminders;
 mod settings;
+mod timer;
 mod toast;
 mod tray;
 
@@ -275,6 +278,78 @@ fn reminder_action(app: AppHandle, note_id: i64, action: String) {
 }
 
 #[tauri::command]
+fn snooze_reminder(app: AppHandle, note_id: i64, until: i64) -> Result<(), String> {
+    reminders::snooze_until(&app, note_id, until)
+}
+
+/// "Non disturbare" fino a `until` (secondi Unix), oppure spento con `null`.
+#[tauri::command]
+fn set_dnd(app: AppHandle, until: Option<i64>) -> Result<Settings, String> {
+    quiet::set_dnd(&app, until)
+}
+
+/// Fine del silenzio in corso (manuale o fascia oraria), `null` se le notifiche sono attive.
+#[tauri::command]
+fn quiet_until(state: State<SettingsState>) -> Option<i64> {
+    quiet::quiet_until(&state.get(), db::now())
+}
+
+#[tauri::command]
+fn dnd_until_morning(state: State<SettingsState>) -> i64 {
+    quiet::until_morning(&state.get())
+}
+
+#[tauri::command]
+fn timer_get(state: State<timer::TimerState>) -> Option<timer::Timer> {
+    state.get()
+}
+
+#[tauri::command]
+fn timer_start(app: AppHandle, note_id: i64, minutes: u32, kind: String) -> Result<timer::Timer, String> {
+    timer::start(&app, note_id, minutes, &kind)
+}
+
+#[tauri::command]
+fn timer_extend(app: AppHandle, minutes: u32) -> Option<timer::Timer> {
+    timer::extend(&app, minutes)
+}
+
+#[tauri::command]
+fn timer_stop(app: AppHandle) {
+    timer::stop(&app);
+}
+
+#[tauri::command]
+fn backup_list(app: AppHandle) -> Result<Vec<backup::BackupInfo>, String> {
+    backup::list(&app)
+}
+
+#[tauri::command]
+async fn backup_now(app: AppHandle) -> Result<backup::BackupInfo, String> {
+    blocking(move || backup::run(&app)).await
+}
+
+#[tauri::command]
+async fn backup_restore(app: AppHandle, name: String) -> Result<(), String> {
+    blocking(move || backup::restore(&app, &name)).await
+}
+
+#[tauri::command]
+fn backup_folder(app: AppHandle) -> Result<String, String> {
+    Ok(backup::backup_dir(&app)?.to_string_lossy().into_owned())
+}
+
+#[tauri::command]
+fn open_backup_folder(app: AppHandle) -> Result<(), String> {
+    use tauri_plugin_opener::OpenerExt;
+    let dir = backup::backup_dir(&app)?;
+    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    app.opener()
+        .open_path(dir.to_string_lossy(), None::<&str>)
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
 fn get_settings(state: State<SettingsState>) -> Settings {
     state.get()
 }
@@ -349,12 +424,14 @@ const SHORTCUT_NEW_NOTE: Code = Code::KeyN; // Ctrl+Alt+N: nuova nota nel deck
 const SHORTCUT_TOGGLE_DECK: Code = Code::KeyH; // Ctrl+Alt+H: mostra/nascondi il deck
 const SHORTCUT_NEW_REMINDER: Code = Code::KeyP; // Ctrl+Alt+P: nuova nota con promemoria
 const SHORTCUT_CAPTURE: Code = Code::KeyV; // Ctrl+Alt+V: salva gli appunti come nota
-const SHORTCUTS: [Code; 5] = [
+const SHORTCUT_QUIET: Code = Code::KeyD; // Ctrl+Alt+D: non disturbare per un'ora / riattiva
+const SHORTCUTS: [Code; 6] = [
     SHORTCUT_ALL_NOTES,
     SHORTCUT_NEW_NOTE,
     SHORTCUT_TOGGLE_DECK,
     SHORTCUT_NEW_REMINDER,
     SHORTCUT_CAPTURE,
+    SHORTCUT_QUIET,
 ];
 
 fn ctrl_alt(code: Code) -> Shortcut {
@@ -493,6 +570,7 @@ pub fn run() {
                         SHORTCUT_NEW_REMINDER => new_note_in_deck(app, true),
                         SHORTCUT_TOGGLE_DECK => toggle_deck(app),
                         SHORTCUT_CAPTURE => capture::capture_clipboard(app),
+                        SHORTCUT_QUIET => quiet::toggle(app),
                         _ => {}
                     }
                 })
@@ -511,6 +589,19 @@ pub fn run() {
             set_reminder,
             clear_reminder,
             reminder_action,
+            snooze_reminder,
+            set_dnd,
+            quiet_until,
+            dnd_until_morning,
+            timer_get,
+            timer_start,
+            timer_extend,
+            timer_stop,
+            backup_list,
+            backup_now,
+            backup_restore,
+            backup_folder,
+            open_backup_folder,
             set_pinned,
             list_folders,
             folder_counts,
@@ -572,6 +663,8 @@ pub fn run() {
             // Lo scheduler notifica subito anche i promemoria scaduti ad app chiusa.
             let scheduler = reminders::start(app.handle());
             app.manage(scheduler);
+            timer::setup(app.handle());
+            backup::start(app.handle());
 
             // Google Calendar: carica il token salvato e avvia il syncer.
             app.manage(GcalState::new(data_dir.join("gcal_token.json")));

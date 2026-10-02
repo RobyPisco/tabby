@@ -2,6 +2,7 @@
   import { clock } from "$lib/clock.svelte";
   import { parseItalianDate } from "$lib/nlDate";
   import { formatReminder, REPEAT_LABELS, type Repeat } from "$lib/notes";
+  import { settings, splitTime } from "$lib/settings.svelte";
 
   let {
     remindAt,
@@ -34,30 +35,33 @@
     return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
   }
 
-  function at(daysFromToday: number, hour: number): Date {
+  function at(daysFromToday: number, hour: number, minute = 0): Date {
     const d = new Date();
     d.setDate(d.getDate() + daysFromToday);
-    d.setHours(hour, 0, 0, 0);
+    d.setHours(hour, minute, 0, 0);
     return d;
   }
 
-  function nextMonday(hour: number): Date {
+  function nextMonday(hour: number, minute: number): Date {
     const d = new Date();
     const days = ((8 - d.getDay()) % 7) || 7;
-    return at(days, hour);
+    return at(days, hour, minute);
   }
 
-  /** Scelte rapide; "Stasera" diventa "Domani sera" quando le 18 sono passate. */
+  /** Scelte rapide; "Stasera" diventa "Domani sera" quando le 18 sono passate.
+   *  "Domani" e "Lunedì" usano l'ora scelta nelle impostazioni. */
   const presets = $derived.by(() => {
     void clock.now;
     const inOneHour = new Date(Date.now() + 3_600_000);
     inOneHour.setSeconds(0, 0);
     const evening = new Date().getHours() < 18 ? { label: "Stasera 18:00", date: at(0, 18) } : { label: "Domani 18:00", date: at(1, 18) };
+    const [h, m] = splitTime(settings.tomorrow_time);
+    const time = `${h}:${String(m).padStart(2, "0")}`;
     return [
       { label: "Tra 1 ora", date: inOneHour },
       evening,
-      { label: "Domani 9:00", date: at(1, 9) },
-      { label: "Lunedì 9:00", date: nextMonday(9) },
+      { label: `Domani ${time}`, date: at(1, h, m) },
+      { label: `Lunedì ${time}`, date: nextMonday(h, m) },
     ];
   });
 
