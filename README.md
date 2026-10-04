@@ -52,7 +52,7 @@ Se un'altra app occupa già una scorciatoia globale, quella viene saltata senza 
 
 ## Google Calendar
 
-In *Impostazioni → Google Calendar* clicca "Collega Google", accedi dal browser e scegli i calendari. Tabby ha il permesso di **sola lettura** (non può modificare né cancellare eventi) e il token resta sul tuo PC, in `%APPDATA%\it.pisco.tabby\gcal_token.json`.
+In *Impostazioni → Google Calendar* clicca "Collega Google", accedi dal browser e scegli i calendari. Gli eventi finiscono nella cartella «Calendario Google», in ordine di data e con un foglietto che mostra il giorno; nel deck compaiono solo quando si avvicinano (di default 7 giorni prima, si cambia in «Mostra nel deck»). Tabby ha il permesso di **sola lettura** (non può modificare né cancellare eventi) e il token resta sul tuo PC, in `%APPDATA%\it.pisco.tabby\gcal_token.json`.
 
 **Dietro un proxy aziendale** attiva «Usa il proxy di Windows»: Tabby usa le impostazioni di proxy di Windows (anche file PAC) e si autentica con le credenziali dell'utente collegato, come fa il browser. È spento di default: così Tabby si collega a Google direttamente, senza mai usare le tue credenziali di rete.
 

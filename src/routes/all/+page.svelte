@@ -4,6 +4,7 @@
   import { getCurrentWindow } from "@tauri-apps/api/window";
   import { open, save } from "@tauri-apps/plugin-dialog";
   import { onMount, tick } from "svelte";
+  import CalendarTile from "$lib/CalendarTile.svelte";
   import { clock } from "$lib/clock.svelte";
   import ColorPicker from "$lib/ColorPicker.svelte";
   import NoteEditor from "$lib/NoteEditor.svelte";
@@ -575,7 +576,11 @@
             <input type="checkbox" checked={checked.includes(note.id)} onchange={() => toggleChecked(note.id)} />
           </label>
           <button class="row" onclick={() => select(note.id)}>
-            <span class="bar" style:background={vivid(note.color)}></span>
+            {#if note.event_at !== null}
+              <CalendarTile at={note.event_at} color={note.color} />
+            {:else}
+              <span class="bar" style:background={vivid(note.color)}></span>
+            {/if}
             <span class="text">
               <span class="title">
                 {#if note.pinned}
@@ -596,6 +601,8 @@
             <span class="meta">
               {#if note.deleted_at !== null}
                 <span class="badge off">Cestino</span>
+              {:else if note.gcal_event_id !== null && !note.archived}
+                <span class="badge google">Google</span>
               {:else}
                 <span class="badge" class:off={note.archived}>{note.archived ? "Archiviata" : "Attiva"}</span>
               {/if}
@@ -642,7 +649,13 @@
               {#if selected.deleted_at !== null}
                 Nel cestino
               {:else}
-                {selected.archived ? "Archiviata" : "Attiva · nel deck"}
+                {#if selected.archived}
+                  Archiviata
+                {:else if selected.gcal_event_id !== null}
+                  Google Calendar · sola lettura
+                {:else}
+                  Attiva · nel deck
+                {/if}
                 <select
                   class="folder-select"
                   aria-label="Cartella"
@@ -731,14 +744,21 @@
             <ReminderLine note={selected} onaction={reminderAction} onsnooze={snoozeUntil} />
           {/if}
           <div class="paper" class:readonly={selected.deleted_at !== null || selected.gcal_event_id !== null}>
-            <input
-              class="title"
-              placeholder="Titolo"
-              bind:this={titleInput}
-              bind:value={selected.title}
-              oninput={scheduleSave}
-              readonly={selected.deleted_at !== null || selected.gcal_event_id !== null}
-            />
+            {#if selected.event_at !== null}
+              <div class="gcal-title">
+                <CalendarTile at={selected.event_at} color={selected.color} size={42} />
+                <h2 class="title">{selected.title || "(senza titolo)"}</h2>
+              </div>
+            {:else}
+              <input
+                class="title"
+                placeholder="Titolo"
+                bind:this={titleInput}
+                bind:value={selected.title}
+                oninput={scheduleSave}
+                readonly={selected.deleted_at !== null}
+              />
+            {/if}
             <NoteEditor
               bind:this={editor}
               value={selected.body}
@@ -1065,6 +1085,13 @@
     background: transparent;
     color: inherit;
   }
+  .badge.google {
+    background: color-mix(in srgb, #1a73e8 16%, transparent);
+    color: #1a73e8;
+  }
+  .dark .badge.google {
+    color: #8ab4f8;
+  }
   .badge.off {
     background: var(--hover);
     color: var(--muted);
@@ -1201,6 +1228,18 @@
     background: var(--note);
     box-shadow: 0 6px 24px rgba(0, 0, 0, 0.12);
     border-top: 5px solid var(--accent);
+  }
+  .gcal-title {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .gcal-title .title {
+    flex: 1;
+    min-width: 0;
+    margin: 0;
+    overflow-wrap: anywhere;
+    line-height: 1.25;
   }
   .paper .title {
     border: 0;

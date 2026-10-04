@@ -25,6 +25,8 @@ export type Settings = {
   gcal_calendar_ids: string[];
   /** Usa il proxy di Windows (PAC, credenziali dell'utente) per le chiamate a Google. */
   gcal_use_proxy: boolean;
+  /** Giorni prima dell'inizio in cui un evento compare nel deck (0 = quando inizia, 365 = sempre). */
+  gcal_deck_days: number;
   /** Backup automatico giornaliero. */
   backup_enabled: boolean;
   /** Cartella dei backup; `null` = `backups` nella cartella dei dati. */
@@ -63,6 +65,7 @@ export const settings = $state<Settings>({
   gcal_sync_range: "2w",
   gcal_calendar_ids: [],
   gcal_use_proxy: false,
+  gcal_deck_days: 7,
   backup_enabled: true,
   backup_dir: null,
   backup_keep: 7,

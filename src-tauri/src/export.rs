@@ -269,6 +269,7 @@ mod tests {
             pinned: false,
             folder_id: None,
             gcal_event_id: None,
+            event_at: None,
         }
     }
 

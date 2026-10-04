@@ -18,6 +18,8 @@ export type Note = {
   folder_id: number | null;
   /** ID evento Google Calendar; `null` per le note normali. Nota in sola lettura. */
   gcal_event_id: string | null;
+  /** Inizio dell'evento Google Calendar (non risente del posticipo); `null` per le note normali. */
+  event_at: number | null;
 };
 
 export type Folder = { id: number; name: string; count: number };
@@ -38,7 +40,10 @@ export const REPEAT_LABELS: Record<Repeat, string> = {
 
 export type Filter = "all" | "active" | "archived" | "trash";
 
-export const COLORS = ["#b5d3f7", "#b3e5cf", "#d4c8f2", "#f7dc82", "#f7c4b5", "#f2b8d4"];
+export const COLORS = [
+  "#b5d3f7", "#b3e5cf", "#d4c8f2", "#f7dc82", "#f7c4b5", "#f2b8d4",
+  "#a8e4e0", "#d4ec9e", "#f9cc8f", "#f5a9a3", "#e6d5bd", "#d5d9e0",
+];
 export const COLOR_NAMES: Record<string, string> = {
   "#b5d3f7": "Azzurro",
   "#b3e5cf": "Verde",
@@ -46,6 +51,12 @@ export const COLOR_NAMES: Record<string, string> = {
   "#f7dc82": "Giallo",
   "#f7c4b5": "Pesca",
   "#f2b8d4": "Rosa",
+  "#a8e4e0": "Acqua",
+  "#d4ec9e": "Lime",
+  "#f9cc8f": "Arancio",
+  "#f5a9a3": "Corallo",
+  "#e6d5bd": "Sabbia",
+  "#d5d9e0": "Grigio",
 };
 
 /** Versione satura e più scura del colore pastello della nota (pillola, barre colorate). */

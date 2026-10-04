@@ -65,7 +65,8 @@
     top: calc(100% + 8px);
     right: -8px;
     z-index: 10;
-    display: flex;
+    display: grid;
+    grid-template-columns: repeat(6, 22px);
     gap: 6px;
     padding: 8px;
     border-radius: 12px;

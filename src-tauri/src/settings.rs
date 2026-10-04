@@ -4,7 +4,10 @@ use serde::{Deserialize, Serialize};
 use std::{path::PathBuf, sync::Mutex};
 
 /// Colori delle note (pastello); le stesse tinte di `COLORS` in `src/lib/notes.ts`.
-pub const COLORS: [&str; 6] = ["#b5d3f7", "#b3e5cf", "#d4c8f2", "#f7dc82", "#f7c4b5", "#f2b8d4"];
+pub const COLORS: [&str; 12] = [
+    "#b5d3f7", "#b3e5cf", "#d4c8f2", "#f7dc82", "#f7c4b5", "#f2b8d4",
+    "#a8e4e0", "#d4ec9e", "#f9cc8f", "#f5a9a3", "#e6d5bd", "#d5d9e0",
+];
 
 /// Suoni disponibili per le notifiche (chiavi salvate nelle impostazioni).
 pub const SOUNDS: [&str; 9] = [
@@ -13,6 +16,10 @@ pub const SOUNDS: [&str; 9] = [
 
 /// Intervalli di importazione di Google Calendar: settimane ("2w") o mesi ("3m").
 pub const GCAL_RANGES: [&str; 6] = ["1w", "2w", "3w", "1m", "2m", "3m"];
+
+/// Giorni prima dell'inizio in cui un evento di Google compare nel deck; 0 = quando inizia,
+/// 365 = sempre (l'importazione arriva al massimo a 3 mesi).
+pub const GCAL_DECK_DAYS: [u32; 7] = [0, 1, 3, 7, 14, 30, 365];
 
 const REPEAT_MINUTES_MAX: u32 = 120;
 const NOTE_WIDTH_RANGE: (u32, u32) = (280, 520);
@@ -52,6 +59,8 @@ pub struct Settings {
     pub gcal_calendar_ids: Vec<String>,
     /// Usa il proxy di Windows (PAC, credenziali dell'utente) per le chiamate a Google.
     pub gcal_use_proxy: bool,
+    /// Quanti giorni prima dell'inizio un evento compare nel deck: uno dei `GCAL_DECK_DAYS`.
+    pub gcal_deck_days: u32,
     /// Backup automatico giornaliero di note e immagini.
     pub backup_enabled: bool,
     /// Cartella dei backup; `None` = `backups` nella cartella dei dati.
@@ -86,6 +95,7 @@ impl Default for Settings {
             gcal_sync_range: "2w".into(),
             gcal_calendar_ids: vec![],
             gcal_use_proxy: false,
+            gcal_deck_days: crate::db::DECK_GCAL_DAYS,
             backup_enabled: true,
             backup_dir: None,
             backup_keep: 7,
@@ -140,6 +150,11 @@ impl Settings {
             gcal_sync_range: one_of(self.gcal_sync_range, &GCAL_RANGES, &default.gcal_sync_range),
             gcal_calendar_ids: self.gcal_calendar_ids,
             gcal_use_proxy: self.gcal_use_proxy,
+            gcal_deck_days: if GCAL_DECK_DAYS.contains(&self.gcal_deck_days) {
+                self.gcal_deck_days
+            } else {
+                default.gcal_deck_days
+            },
             backup_enabled: self.backup_enabled,
             backup_dir: self.backup_dir.filter(|d| !d.trim().is_empty()),
             backup_keep: self.backup_keep.clamp(BACKUP_KEEP_RANGE.0, BACKUP_KEEP_RANGE.1),

@@ -54,8 +54,8 @@ fn set_interactive(window: WebviewWindow, interactive: bool) -> Result<(), Strin
 }
 
 #[tauri::command]
-fn list_notes(db: State<Db>) -> Result<Vec<Note>, String> {
-    db.list_active().map_err(|e| e.to_string())
+fn list_notes(db: State<Db>, settings: State<SettingsState>) -> Result<Vec<Note>, String> {
+    db.list_deck(settings.get().gcal_deck_days).map_err(|e| e.to_string())
 }
 
 #[tauri::command]

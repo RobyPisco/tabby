@@ -74,7 +74,16 @@ Dettagli di progetto e motivazioni in [`PIANO.md`](PIANO.md).
 - [x] Timer / pomodoro legato a una nota, uno alla volta (`timer.rs`): tempo sulla linguetta, notifica con Pausa / Altri N min.
 - [x] Google Calendar: intervallo da 1 settimana a 3 mesi, con paginazione delle risposte.
 - [ ] Da provare a mano: notifiche con 5 pulsanti, timer fino alla fine, Non disturbare dalla tray, backup su altro disco e ripristino.
-- [ ] Con 2-3 mesi di calendario il deck si riempie di eventi: valutare di mostrare nel deck solo quelli dei prossimi giorni.
+- [x] Con 2-3 mesi di calendario il deck si riempie di eventi: nel deck solo quelli dei prossimi giorni (scelta nelle impostazioni).
+
+## 7c. Versione 1.4.1
+- [x] Eventi Google tornati in Google dopo essere finiti nel cestino per la sync: ripristinati da soli (colonna `gcal_stale`); quelli eliminati a mano restano eliminati.
+- [x] Eventi Google in ordine di data, dopo le note normali, sia nell'elenco sia nel deck.
+- [x] Eventi Google riconoscibili: foglietto con mese e giorno, etichetta "Google", icona calendario sulla linguetta, titolo intero.
+- [x] Titolo delle note del deck su una riga sua, va a capo invece di tagliarsi.
+- [x] 12 colori per le note (Acqua, Lime, Arancio, Corallo, Sabbia, Grigio in più).
+- [x] Impostazione «Mostra nel deck» per gli eventi Google (da "solo quando iniziano" a "sempre").
+- [x] Pannello Impostazioni a sezioni: Generale, Note, Promemoria, Google Calendar, Backup e dati, Informazioni.
 
 ## 8. Idee per dopo
 - [ ] Sync via OneDrive/Drive (anche una cartella di file `.md` sincronizzabile).
