@@ -201,6 +201,26 @@ fn reset_pin(app: AppHandle, db: State<Db>, state: State<SettingsState>) -> Resu
     Ok(())
 }
 
+/// Notifica di sistema quando il frontend (src/lib/updates.ts) trova una versione più
+/// recente su GitHub; al massimo una volta per versione, anche tra un riavvio e l'altro.
+#[tauri::command]
+fn notify_update_available(app: AppHandle, state: State<SettingsState>, version: String, url: String) {
+    if state.update_already_notified(&version) {
+        return;
+    }
+    toast::simple(
+        &app,
+        "Nuova versione disponibile",
+        &format!("Tabby {version} è pronto da scaricare. Clic per aprire la pagina."),
+        move |_| {
+            let _ = open::that(&url);
+        },
+    );
+    if let Err(e) = state.mark_update_notified(&version) {
+        eprintln!("stato della notifica di aggiornamento non salvato: {e}");
+    }
+}
+
 #[tauri::command]
 fn backlinks(db: State<Db>, id: i64) -> Result<Vec<NoteRef>, String> {
     db.backlinks(id).map_err(|e| e.to_string())
@@ -662,6 +682,7 @@ pub fn run() {
             set_pin,
             change_pin,
             reset_pin,
+            notify_update_available,
             list_folders,
             folder_counts,
             create_folder,

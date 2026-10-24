@@ -1,6 +1,7 @@
 <script lang="ts">
   import { invoke } from "@tauri-apps/api/core";
   import { listen } from "@tauri-apps/api/event";
+  import { getVersion } from "@tauri-apps/api/app";
   import { onMount, tick } from "svelte";
   import { clock } from "$lib/clock.svelte";
   import CalendarTile from "$lib/CalendarTile.svelte";
@@ -17,6 +18,7 @@
   import LockButton from "$lib/LockButton.svelte";
   import LockedContent from "$lib/LockedContent.svelte";
   import { displayedNote } from "$lib/lock";
+  import { findUpdate } from "$lib/updates";
   import {
     isOverdue,
     onNotesChangedElsewhere,
@@ -38,6 +40,7 @@
   const GLASS_ALPHA = { clear: 0.15, dense: 0.85 }; // opacità del vetro a 100% e a 0% di trasparenza
   const LEAVE_DELAY_MS = 350;
   const SAVE_DEBOUNCE_MS = 250;
+  const UPDATE_CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000; // una volta al giorno
 
   let notes = $state<Note[]>([]);
   let phase = $state<Phase>("rest");
@@ -214,10 +217,23 @@
     deckDays = settings.gcal_deck_days;
   });
 
+  /** Controlla se c'è una versione più nuova su GitHub e, se sì, lo fa sapere con una
+   *  notifica di sistema (al massimo una volta per versione, vedi notify_update_available). */
+  async function checkForUpdate() {
+    try {
+      const update = await findUpdate(await getVersion());
+      if (update) await invoke("notify_update_available", { version: update.version, url: update.url });
+    } catch (e) {
+      console.error("controllo aggiornamenti", e);
+    }
+  }
+
   onMount(() => {
     reload();
     const settingsReady = initSettings();
     const timerReady = initTimer();
+    checkForUpdate();
+    const updateCheckTimer = setInterval(checkForUpdate, UPDATE_CHECK_INTERVAL_MS);
     const unlistenChanges = onNotesChangedElsewhere(reload);
     // Ctrl+Alt+N / Ctrl+Alt+P o menu della tray; il payload dice se aprire subito il promemoria.
     const unlistenNewNote = listen<boolean>("new-note", ({ payload }) => addNote(payload));
@@ -265,6 +281,7 @@
       settingsReady.then((fn) => fn());
       timerReady.then((fn) => fn());
       unlistenSnooze.then((fn) => fn());
+      clearInterval(updateCheckTimer);
     };
   });
 

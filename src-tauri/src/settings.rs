@@ -82,6 +82,9 @@ pub struct Settings {
     pub pin_hash: Option<String>,
     /// Salt usato per `pin_hash`.
     pub pin_salt: Option<String>,
+    /// Ultima versione per cui è già stata mostrata la notifica di aggiornamento disponibile;
+    /// `None` = nessuna ancora notificata. Evita di notificare la stessa versione più volte.
+    pub last_update_notified: Option<String>,
 }
 
 impl Default for Settings {
@@ -114,6 +117,7 @@ impl Default for Settings {
             deck_offset: 0.5,
             pin_hash: None,
             pin_salt: None,
+            last_update_notified: None,
         }
     }
 }
@@ -176,6 +180,7 @@ impl Settings {
             deck_offset: self.deck_offset.clamp(0.0, 1.0),
             pin_hash: self.pin_hash,
             pin_salt: self.pin_salt,
+            last_update_notified: self.last_update_notified,
         }
     }
 
@@ -237,6 +242,15 @@ impl Settings {
         self.pin_hash = None;
         self.pin_salt = None;
     }
+
+    /// Vero se è già stata mostrata la notifica di aggiornamento per questa versione.
+    pub fn update_already_notified(&self, version: &str) -> bool {
+        self.last_update_notified.as_deref() == Some(version)
+    }
+
+    pub fn mark_update_notified(&mut self, version: &str) {
+        self.last_update_notified = Some(version.to_string());
+    }
 }
 
 pub struct SettingsState {
@@ -287,6 +301,16 @@ impl SettingsState {
     pub fn clear_pin(&self) -> Result<Settings, String> {
         let mut current = self.get();
         current.clear_pin();
+        self.set(current)
+    }
+
+    pub fn update_already_notified(&self, version: &str) -> bool {
+        self.get().update_already_notified(version)
+    }
+
+    pub fn mark_update_notified(&self, version: &str) -> Result<Settings, String> {
+        let mut current = self.get();
+        current.mark_update_notified(version);
         self.set(current)
     }
 }
@@ -427,6 +451,20 @@ mod tests {
         s.clear_pin();
         assert!(!s.has_pin());
         assert!(!s.verify_pin("1234"));
+    }
+
+    #[test]
+    fn a_version_not_yet_notified_is_not_already_notified() {
+        let s = Settings::default();
+        assert!(!s.update_already_notified("1.4.4"));
+    }
+
+    #[test]
+    fn marking_a_version_notified_makes_it_already_notified() {
+        let mut s = Settings::default();
+        s.mark_update_notified("1.4.4");
+        assert!(s.update_already_notified("1.4.4"));
+        assert!(!s.update_already_notified("1.4.5"));
     }
 
     #[test]
