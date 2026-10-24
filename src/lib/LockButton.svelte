@@ -113,12 +113,12 @@
     padding: 0;
     border: 0;
     border-radius: 8px;
-    background: rgba(0, 0, 0, 0.08);
-    color: rgba(0, 0, 0, 0.55);
+    background: var(--bell-bg, rgba(0, 0, 0, 0.08));
+    color: var(--bell-fg, rgba(0, 0, 0, 0.55));
     cursor: pointer;
   }
   .icon-btn:hover {
-    background: rgba(0, 0, 0, 0.16);
+    filter: brightness(0.92);
   }
   .icon-btn.on {
     background: rgba(0, 0, 0, 0.78);
