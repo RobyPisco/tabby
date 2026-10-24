@@ -1,6 +1,6 @@
 {
   "name": "tabby",
-  "version": "1.4.5",
+  "version": "1.4.6",
   "description": "Tabby: sticky notes ancorate al bordo dello schermo di Windows",
   "type": "module",
   "scripts": {
