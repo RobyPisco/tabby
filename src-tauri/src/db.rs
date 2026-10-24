@@ -1,6 +1,7 @@
 use rusqlite::{params, Connection, OptionalExtension, Row};
 use serde::{Deserialize, Serialize};
 use std::{
+    collections::HashSet,
     path::Path,
     sync::Mutex,
     time::{SystemTime, UNIX_EPOCH},
@@ -31,6 +32,8 @@ pub struct Note {
     /// Protetta da PIN: titolo/corpo vanno oscurati ovunque, finché non si verifica il PIN
     /// per questa apertura (vedi `redact_if_locked` e ADR-0001).
     pub locked: bool,
+    /// Già segnalata come "nota dimenticata" (vedi `forgotten_notes`); azzerato a ogni modifica.
+    pub forgotten_notified: bool,
 }
 
 /// Promemoria scaduto da notificare.
@@ -69,12 +72,38 @@ pub(crate) fn row_to_note(row: &Row) -> rusqlite::Result<Note> {
         gcal_event_id: row.get(12)?,
         event_at: row.get(13)?,
         locked: row.get::<_, i64>(14)? != 0,
+        forgotten_notified: row.get::<_, i64>(15)? != 0,
     })
 }
 
 pub(crate) const COLUMNS: &str = "id, title, body, color, archived, created_at, updated_at, deleted_at, \
                        COALESCE(snoozed_until, due_at), repeat, pinned, folder_id, gcal_event_id, \
-                       CASE WHEN gcal_event_id IS NOT NULL THEN due_at END, locked";
+                       CASE WHEN gcal_event_id IS NOT NULL THEN due_at END, locked, forgotten_notified";
+
+/// Note attive, non fissate, senza promemoria né timer attivo, non eventi Google Calendar,
+/// non già segnalate, ferme da almeno `threshold_secs` (vedi GLOSSARY.md "Nota dimenticata").
+/// `timed_ids` sono gli id con un timer attivo in questo momento (stato di `TimerState`, non
+/// persistito su `Note`).
+pub(crate) fn forgotten_notes<'a>(
+    notes: &'a [Note],
+    timed_ids: &HashSet<i64>,
+    now: i64,
+    threshold_secs: i64,
+) -> Vec<&'a Note> {
+    notes
+        .iter()
+        .filter(|n| {
+            !n.archived
+                && n.deleted_at.is_none()
+                && !n.pinned
+                && n.remind_at.is_none()
+                && n.gcal_event_id.is_none()
+                && !n.forgotten_notified
+                && !timed_ids.contains(&n.id)
+                && now - n.updated_at >= threshold_secs
+        })
+        .collect()
+}
 
 /// Titolo/corpo oscurati se la nota è protetta e non ancora sbloccata per questa apertura;
 /// nota intatta altrimenti. Usata ovunque le note lasciano il backend per liste/anteprime.
@@ -154,6 +183,7 @@ fn migrate(conn: &Connection) -> rusqlite::Result<()> {
     // se l'evento ricompare, la sync la ripristina.
     add_column_if_missing(conn, "gcal_stale", "INTEGER NOT NULL DEFAULT 0")?;
     add_column_if_missing(conn, "locked", "INTEGER NOT NULL DEFAULT 0")?;
+    add_column_if_missing(conn, "forgotten_notified", "INTEGER NOT NULL DEFAULT 0")?;
     crate::organize::create_tables(conn)?;
     // Indice univoco per gcal_event_id: evita duplicati alla sync.
     conn.execute_batch(
@@ -331,7 +361,7 @@ impl Db {
             .optional()?;
         crate::organize::snapshot_before_update(&conn, id, title, body)?;
         conn.execute(
-            "UPDATE notes SET title = ?2, body = ?3, updated_at = ?4 WHERE id = ?1",
+            "UPDATE notes SET title = ?2, body = ?3, updated_at = ?4, forgotten_notified = 0 WHERE id = ?1",
             params![id, title, body, now()],
         )?;
         if let Some(old) = old_title {
@@ -451,6 +481,17 @@ impl Db {
         let conn = self.0.lock().unwrap();
         conn.execute("UPDATE notes SET locked = 0 WHERE locked = 1", [])?;
         Ok(())
+    }
+
+    /// Segna le note come già notificate "dimenticate": non rientrano più in `forgotten_notes`
+    /// finché non vengono modificate di nuovo (vedi `update`, che azzera il flag).
+    pub fn mark_forgotten_notified(&self, ids: &[i64]) -> rusqlite::Result<()> {
+        let mut conn = self.0.lock().unwrap();
+        let tx = conn.transaction()?;
+        for id in ids {
+            tx.execute("UPDATE notes SET forgotten_notified = 1 WHERE id = ?1", [id])?;
+        }
+        tx.commit()
     }
 
     /// Sposta nel cestino (`trashed = true`) o ripristina dal cestino.
@@ -659,10 +700,93 @@ mod tests {
         Db::open(Path::new(":memory:")).expect("database in memoria")
     }
 
+    /// Nota "normale": attiva, non fissata, senza promemoria, non un evento Google, non
+    /// protetta, non già segnalata come dimenticata. I singoli test la specializzano.
+    fn sample_note(id: i64, updated_at: i64) -> Note {
+        Note {
+            id,
+            title: "Nota".into(),
+            body: "".into(),
+            color: "#fff".into(),
+            archived: false,
+            created_at: updated_at,
+            updated_at,
+            deleted_at: None,
+            remind_at: None,
+            repeat: None,
+            pinned: false,
+            folder_id: None,
+            gcal_event_id: None,
+            event_at: None,
+            locked: false,
+            forgotten_notified: false,
+        }
+    }
+
     fn ids(notes: &[Note]) -> Vec<i64> {
         let mut ids: Vec<i64> = notes.iter().map(|n| n.id).collect();
         ids.sort();
         ids
+    }
+
+    #[test]
+    fn an_old_note_with_no_exclusions_is_forgotten() {
+        let notes = vec![sample_note(1, 1000)];
+        let result = forgotten_notes(&notes, &HashSet::new(), 100_000, 1000);
+        assert_eq!(result.iter().map(|n| n.id).collect::<Vec<_>>(), vec![1]);
+    }
+
+    #[test]
+    fn a_pinned_old_note_is_not_forgotten() {
+        let notes = vec![Note { pinned: true, ..sample_note(1, 1000) }];
+        let result = forgotten_notes(&notes, &HashSet::new(), 100_000, 1000);
+        assert!(result.is_empty());
+    }
+
+    #[test]
+    fn an_old_note_with_a_reminder_is_not_forgotten() {
+        let notes = vec![Note { remind_at: Some(200_000), ..sample_note(1, 1000) }];
+        let result = forgotten_notes(&notes, &HashSet::new(), 100_000, 1000);
+        assert!(result.is_empty());
+    }
+
+    #[test]
+    fn an_old_note_with_an_active_timer_is_not_forgotten() {
+        let notes = vec![sample_note(1, 1000)];
+        let timed: HashSet<i64> = [1].into_iter().collect();
+        let result = forgotten_notes(&notes, &timed, 100_000, 1000);
+        assert!(result.is_empty());
+    }
+
+    #[test]
+    fn an_old_google_calendar_event_is_not_forgotten() {
+        let notes = vec![Note { gcal_event_id: Some("abc".into()), ..sample_note(1, 1000) }];
+        let result = forgotten_notes(&notes, &HashSet::new(), 100_000, 1000);
+        assert!(result.is_empty());
+    }
+
+    #[test]
+    fn an_already_notified_old_note_is_not_forgotten_again() {
+        let notes = vec![Note { forgotten_notified: true, ..sample_note(1, 1000) }];
+        let result = forgotten_notes(&notes, &HashSet::new(), 100_000, 1000);
+        assert!(result.is_empty());
+    }
+
+    #[test]
+    fn a_recently_updated_note_is_not_forgotten() {
+        let notes = vec![sample_note(1, 99_500)];
+        let result = forgotten_notes(&notes, &HashSet::new(), 100_000, 1000);
+        assert!(result.is_empty());
+    }
+
+    #[test]
+    fn archived_and_trashed_old_notes_are_not_forgotten() {
+        let notes = vec![
+            Note { archived: true, ..sample_note(1, 1000) },
+            Note { deleted_at: Some(2000), ..sample_note(2, 1000) },
+        ];
+        let result = forgotten_notes(&notes, &HashSet::new(), 100_000, 1000);
+        assert!(result.is_empty());
     }
 
     #[test]

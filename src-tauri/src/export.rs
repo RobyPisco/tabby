@@ -271,6 +271,7 @@ mod tests {
             gcal_event_id: None,
             event_at: None,
             locked: false,
+            forgotten_notified: false,
         }
     }
 

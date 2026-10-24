@@ -47,6 +47,13 @@ export type Settings = {
    *  dedicati `set_pin`/`change_pin`/`reset_pin`, mai scrivendolo qui direttamente. */
   pin_hash: string | null;
   pin_salt: string | null;
+  /** Versione per cui è già stata mostrata la notifica di aggiornamento; `null` = nessuna.
+   *  Campo di sola lettura: lo aggiorna il comando `notify_update_available`. */
+  last_update_notified: string | null;
+  /** Avvisa quando una nota attiva resta ferma troppo a lungo. */
+  forgotten_enabled: boolean;
+  /** Dopo quanti giorni senza modifiche una nota è considerata dimenticata. */
+  forgotten_days: number;
 };
 
 /** Vero se è già stato impostato un PIN globale per le note protette. */
@@ -89,6 +96,9 @@ export const settings = $state<Settings>({
   deck_offset: 0.5,
   pin_hash: null,
   pin_salt: null,
+  last_update_notified: null,
+  forgotten_enabled: true,
+  forgotten_days: 30,
 });
 
 /** "09:00" → ore e minuti. */

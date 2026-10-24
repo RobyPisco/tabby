@@ -26,6 +26,7 @@ const NOTE_WIDTH_RANGE: (u32, u32) = (280, 520);
 const EDITOR_SIZE_RANGE: (u32, u32) = (13, 24);
 const DECK_TRANSPARENCY_MAX: u32 = 100;
 const BACKUP_KEEP_RANGE: (u32, u32) = (1, 60);
+const FORGOTTEN_DAYS_RANGE: (u32, u32) = (1, 365);
 
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(default)]
@@ -85,6 +86,10 @@ pub struct Settings {
     /// Ultima versione per cui è già stata mostrata la notifica di aggiornamento disponibile;
     /// `None` = nessuna ancora notificata. Evita di notificare la stessa versione più volte.
     pub last_update_notified: Option<String>,
+    /// Avvisa quando una nota attiva resta ferma troppo a lungo (vedi GLOSSARY.md "Nota dimenticata").
+    pub forgotten_enabled: bool,
+    /// Dopo quanti giorni senza modifiche una nota è considerata dimenticata.
+    pub forgotten_days: u32,
 }
 
 impl Default for Settings {
@@ -118,6 +123,8 @@ impl Default for Settings {
             pin_hash: None,
             pin_salt: None,
             last_update_notified: None,
+            forgotten_enabled: true,
+            forgotten_days: 30,
         }
     }
 }
@@ -181,6 +188,8 @@ impl Settings {
             pin_hash: self.pin_hash,
             pin_salt: self.pin_salt,
             last_update_notified: self.last_update_notified,
+            forgotten_enabled: self.forgotten_enabled,
+            forgotten_days: self.forgotten_days.clamp(FORGOTTEN_DAYS_RANGE.0, FORGOTTEN_DAYS_RANGE.1),
         }
     }
 
@@ -366,6 +375,14 @@ mod tests {
     fn deck_offset_above_range_falls_back_to_max() {
         let s = Settings { deck_offset: 2.0, ..Settings::default() }.sanitized();
         assert_eq!(s.deck_offset, 1.0);
+    }
+
+    #[test]
+    fn forgotten_days_out_of_range_is_clamped() {
+        let s = Settings { forgotten_days: 0, ..Settings::default() }.sanitized();
+        assert_eq!(s.forgotten_days, 1);
+        let s = Settings { forgotten_days: 9999, ..Settings::default() }.sanitized();
+        assert_eq!(s.forgotten_days, 365);
     }
 
     #[test]

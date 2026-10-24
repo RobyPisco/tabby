@@ -626,6 +626,33 @@
             </div>
           {/if}
         </div>
+
+        <h4>📋 Note dimenticate</h4>
+        <div class="group">
+          <label class="row check">
+            <span>
+              Avvisami delle note ferme da tempo
+              <small class="desc">Note attive, non fissate, senza promemoria o timer, non toccate da un po'.</small>
+            </span>
+            <input
+              type="checkbox"
+              checked={settings.forgotten_enabled}
+              onchange={(e) => update({ forgotten_enabled: e.currentTarget.checked })}
+            />
+          </label>
+          {#if settings.forgotten_enabled}
+            <div class="row sub">
+              <span>Dopo quanti giorni</span>
+              <input
+                type="number"
+                min="1"
+                max="365"
+                value={settings.forgotten_days}
+                onchange={(e) => update({ forgotten_days: Number(e.currentTarget.value) })}
+              />
+            </div>
+          {/if}
+        </div>
       {:else if tab === "gcal"}
         <h4>Account</h4>
         <div class="group">

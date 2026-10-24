@@ -221,6 +221,51 @@ fn notify_update_available(app: AppHandle, state: State<SettingsState>, version:
     }
 }
 
+/// Avvisa delle note attive ferme da troppo tempo (vedi GLOSSARY.md "Nota dimenticata").
+/// Chiamato dal frontend all'avvio e una volta al giorno, come `notify_update_available`.
+#[tauri::command]
+fn check_forgotten_notes(
+    app: AppHandle,
+    db: State<Db>,
+    settings: State<SettingsState>,
+    timers: State<timer::TimerState>,
+) -> Result<(), String> {
+    let settings = settings.get();
+    if !settings.forgotten_enabled {
+        return Ok(());
+    }
+    let notes = db.list_active().map_err(|e| e.to_string())?;
+    let timed_ids: std::collections::HashSet<i64> = timers.all().iter().map(|t| t.note_id).collect();
+    let threshold_secs = i64::from(settings.forgotten_days) * 24 * 60 * 60;
+    let forgotten = db::forgotten_notes(&notes, &timed_ids, db::now(), threshold_secs);
+    if forgotten.is_empty() {
+        return Ok(());
+    }
+    let (title, text): (&str, String) = if let [note] = forgotten.as_slice() {
+        // Nota protetta: niente di titolo/corpo deve finire in una notifica di sistema
+        // (stessa regola di reminders.rs::show_toast).
+        let t = if note.locked {
+            pin::PLACEHOLDER
+        } else {
+            let t = note.title.trim();
+            if t.is_empty() { "Senza titolo" } else { t }
+        };
+        ("Nota dimenticata", t.to_string())
+    } else {
+        (
+            "Note dimenticate",
+            format!(
+                "Hai {} note ferme da più di {} giorni.",
+                forgotten.len(),
+                settings.forgotten_days
+            ),
+        )
+    };
+    toast::simple(&app, title, &text, |app| show_all_notes_window(app));
+    let ids: Vec<i64> = forgotten.iter().map(|n| n.id).collect();
+    db.mark_forgotten_notified(&ids).map_err(|e| e.to_string())
+}
+
 #[tauri::command]
 fn backlinks(db: State<Db>, id: i64) -> Result<Vec<NoteRef>, String> {
     db.backlinks(id).map_err(|e| e.to_string())
@@ -683,6 +728,7 @@ pub fn run() {
             change_pin,
             reset_pin,
             notify_update_available,
+            check_forgotten_notes,
             list_folders,
             folder_counts,
             create_folder,

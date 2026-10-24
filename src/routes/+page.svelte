@@ -40,7 +40,7 @@
   const GLASS_ALPHA = { clear: 0.15, dense: 0.85 }; // opacità del vetro a 100% e a 0% di trasparenza
   const LEAVE_DELAY_MS = 350;
   const SAVE_DEBOUNCE_MS = 250;
-  const UPDATE_CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000; // una volta al giorno
+  const DAILY_CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000; // una volta al giorno
 
   let notes = $state<Note[]>([]);
   let phase = $state<Phase>("rest");
@@ -228,12 +228,23 @@
     }
   }
 
+  /** Controlli non urgenti, ripetuti una volta al giorno (più il primo giro all'avvio):
+   *  aggiornamento disponibile e note dimenticate (vedi GLOSSARY.md). */
+  async function dailyChecks() {
+    await checkForUpdate();
+    try {
+      await invoke("check_forgotten_notes");
+    } catch (e) {
+      console.error("controllo note dimenticate", e);
+    }
+  }
+
   onMount(() => {
     reload();
     const settingsReady = initSettings();
     const timerReady = initTimer();
-    checkForUpdate();
-    const updateCheckTimer = setInterval(checkForUpdate, UPDATE_CHECK_INTERVAL_MS);
+    dailyChecks();
+    const dailyCheckTimer = setInterval(dailyChecks, DAILY_CHECK_INTERVAL_MS);
     const unlistenChanges = onNotesChangedElsewhere(reload);
     // Ctrl+Alt+N / Ctrl+Alt+P o menu della tray; il payload dice se aprire subito il promemoria.
     const unlistenNewNote = listen<boolean>("new-note", ({ payload }) => addNote(payload));
@@ -281,7 +292,7 @@
       settingsReady.then((fn) => fn());
       timerReady.then((fn) => fn());
       unlistenSnooze.then((fn) => fn());
-      clearInterval(updateCheckTimer);
+      clearInterval(dailyCheckTimer);
     };
   });
 
