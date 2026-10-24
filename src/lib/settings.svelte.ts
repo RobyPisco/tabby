@@ -42,7 +42,17 @@ export type Settings = {
   tomorrow_time: string;
   /** Posizione verticale della pillola sul bordo dx/sx: frazione 0.0 (in alto) - 1.0 (in basso); 0.5 = centro. */
   deck_offset: number;
+  /** Hash del PIN globale che protegge le note protette; `null` = nessun PIN impostato.
+   *  Campo di sola lettura dal punto di vista del frontend: si cambia con i comandi
+   *  dedicati `set_pin`/`change_pin`/`reset_pin`, mai scrivendolo qui direttamente. */
+  pin_hash: string | null;
+  pin_salt: string | null;
 };
+
+/** Vero se è già stato impostato un PIN globale per le note protette. */
+export function hasPin(s: Settings = settings): boolean {
+  return s.pin_hash !== null;
+}
 
 export const FONTS: Record<Settings["editor_font"], { label: string; css: string }> = {
   hand: { label: "A mano (Segoe Print)", css: '"Segoe Print", "Segoe UI", cursive' },
@@ -77,6 +87,8 @@ export const settings = $state<Settings>({
   quiet_to: "08:00",
   tomorrow_time: "09:00",
   deck_offset: 0.5,
+  pin_hash: null,
+  pin_salt: null,
 });
 
 /** "09:00" → ore e minuti. */

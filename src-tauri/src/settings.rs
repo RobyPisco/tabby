@@ -78,6 +78,10 @@ pub struct Settings {
     /// Posizione verticale della pillola sul bordo dx/sx: frazione 0.0 (in alto) - 1.0 (in basso)
     /// dell'altezza disponibile; 0.5 = centro.
     pub deck_offset: f64,
+    /// Hash del PIN globale che protegge le note protette; `None` = nessun PIN impostato.
+    pub pin_hash: Option<String>,
+    /// Salt usato per `pin_hash`.
+    pub pin_salt: Option<String>,
 }
 
 impl Default for Settings {
@@ -108,6 +112,8 @@ impl Default for Settings {
             quiet_to: "08:00".into(),
             tomorrow_time: "09:00".into(),
             deck_offset: 0.5,
+            pin_hash: None,
+            pin_salt: None,
         }
     }
 }
@@ -168,6 +174,8 @@ impl Settings {
             quiet_to: time_or(self.quiet_to, &default.quiet_to),
             tomorrow_time: time_or(self.tomorrow_time, &default.tomorrow_time),
             deck_offset: self.deck_offset.clamp(0.0, 1.0),
+            pin_hash: self.pin_hash,
+            pin_salt: self.pin_salt,
         }
     }
 
@@ -184,6 +192,50 @@ impl Settings {
         } else {
             self.new_note_color.clone()
         }
+    }
+
+    pub fn has_pin(&self) -> bool {
+        self.pin_hash.is_some() && self.pin_salt.is_some()
+    }
+
+    /// Imposta il PIN la prima volta; usa `change_pin` per sostituirne uno già impostato.
+    pub fn set_pin(&mut self, pin: &str) -> Result<(), String> {
+        if self.has_pin() {
+            return Err("un PIN è già impostato".into());
+        }
+        if !crate::pin::is_valid(pin) {
+            return Err("il PIN deve avere 4-6 cifre".into());
+        }
+        let (hash, salt) = crate::pin::hash(pin);
+        self.pin_hash = Some(hash);
+        self.pin_salt = Some(salt);
+        Ok(())
+    }
+
+    pub fn verify_pin(&self, pin: &str) -> bool {
+        match (&self.pin_hash, &self.pin_salt) {
+            (Some(hash), Some(salt)) => crate::pin::verify(pin, salt, hash),
+            _ => false,
+        }
+    }
+
+    pub fn change_pin(&mut self, old_pin: &str, new_pin: &str) -> Result<(), String> {
+        if !self.verify_pin(old_pin) {
+            return Err("PIN attuale sbagliato".into());
+        }
+        if !crate::pin::is_valid(new_pin) {
+            return Err("il PIN deve avere 4-6 cifre".into());
+        }
+        let (hash, salt) = crate::pin::hash(new_pin);
+        self.pin_hash = Some(hash);
+        self.pin_salt = Some(salt);
+        Ok(())
+    }
+
+    /// Reset del PIN dimenticato: nessuna verifica richiesta.
+    pub fn clear_pin(&mut self) {
+        self.pin_hash = None;
+        self.pin_salt = None;
     }
 }
 
@@ -218,6 +270,24 @@ impl SettingsState {
         *self.value.lock().unwrap() = settings.clone();
         crate::http::set_use_proxy(settings.gcal_use_proxy);
         Ok(settings)
+    }
+
+    pub fn set_pin(&self, pin: &str) -> Result<Settings, String> {
+        let mut current = self.get();
+        current.set_pin(pin)?;
+        self.set(current)
+    }
+
+    pub fn change_pin(&self, old_pin: &str, new_pin: &str) -> Result<Settings, String> {
+        let mut current = self.get();
+        current.change_pin(old_pin, new_pin)?;
+        self.set(current)
+    }
+
+    pub fn clear_pin(&self) -> Result<Settings, String> {
+        let mut current = self.get();
+        current.clear_pin();
+        self.set(current)
     }
 }
 
@@ -308,6 +378,55 @@ mod tests {
         assert!(parse(r#"{ "gcal_enabled": true }"#).unwrap().gcal_use_proxy);
         // Scelta esplicita dell'utente: si rispetta.
         assert!(!parse(r#"{ "gcal_enabled": true, "gcal_use_proxy": false }"#).unwrap().gcal_use_proxy);
+    }
+
+    #[test]
+    fn setting_a_pin_makes_it_verifiable() {
+        let mut s = Settings::default();
+        s.set_pin("1234").unwrap();
+        assert!(s.has_pin());
+        assert!(s.verify_pin("1234"));
+    }
+
+    #[test]
+    fn cannot_set_a_pin_when_one_already_exists() {
+        let mut s = Settings::default();
+        s.set_pin("1234").unwrap();
+        assert!(s.set_pin("5678").is_err());
+        assert!(s.verify_pin("1234"));
+    }
+
+    #[test]
+    fn set_pin_rejects_an_invalid_pin() {
+        let mut s = Settings::default();
+        assert!(s.set_pin("abcd").is_err());
+        assert!(!s.has_pin());
+    }
+
+    #[test]
+    fn changing_the_pin_replaces_it() {
+        let mut s = Settings::default();
+        s.set_pin("1234").unwrap();
+        s.change_pin("1234", "5678").unwrap();
+        assert!(s.verify_pin("5678"));
+        assert!(!s.verify_pin("1234"));
+    }
+
+    #[test]
+    fn changing_the_pin_with_the_wrong_current_pin_fails() {
+        let mut s = Settings::default();
+        s.set_pin("1234").unwrap();
+        assert!(s.change_pin("0000", "5678").is_err());
+        assert!(s.verify_pin("1234"));
+    }
+
+    #[test]
+    fn clearing_the_pin_removes_it() {
+        let mut s = Settings::default();
+        s.set_pin("1234").unwrap();
+        s.clear_pin();
+        assert!(!s.has_pin());
+        assert!(!s.verify_pin("1234"));
     }
 
     #[test]

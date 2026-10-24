@@ -20,6 +20,8 @@ export type Note = {
   gcal_event_id: string | null;
   /** Inizio dell'evento Google Calendar (non risente del posticipo); `null` per le note normali. */
   event_at: number | null;
+  /** Protetta da PIN: titolo/corpo sono oscurati finché non si verifica il PIN per questa apertura. */
+  locked: boolean;
 };
 
 export type Folder = { id: number; name: string; count: number };

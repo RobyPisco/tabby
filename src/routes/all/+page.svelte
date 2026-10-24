@@ -12,6 +12,9 @@
   import ReminderPicker from "$lib/ReminderPicker.svelte";
   import TimerButton from "$lib/TimerButton.svelte";
   import { initTimer } from "$lib/timer.svelte";
+  import LockButton from "$lib/LockButton.svelte";
+  import LockedContent from "$lib/LockedContent.svelte";
+  import { displayedNote } from "$lib/lock";
   import SettingsPanel from "$lib/SettingsPanel.svelte";
   import { colorForNewNote, initSettings, settings } from "$lib/settings.svelte";
   import Sidebar from "$lib/Sidebar.svelte";
@@ -77,6 +80,14 @@
   let saveTimer: ReturnType<typeof setTimeout> | undefined;
 
   const selected = $derived(notes.find((n) => n.id === selectedId) ?? null);
+  /** Contenuto reale della nota selezionata, dopo aver verificato il PIN per questa apertura. */
+  let unlockedNote = $state<Note | null>(null);
+  $effect(() => {
+    selectedId;
+    unlockedNote = null;
+  });
+  const locked = $derived(selected !== null && selected.locked && !unlockedNote);
+  const shownNote = $derived(selected && displayedNote(selected, unlockedNote));
   /** Le azioni agiscono sulle note spuntate o, se nessuna, su quella selezionata. */
   const targets = $derived(checked.length > 0 ? checked : selectedId !== null ? [selectedId] : []);
   const allChecked = $derived(notes.length > 0 && checked.length === notes.length);
@@ -121,7 +132,8 @@
 
   async function saveSelected() {
     const note = notes.find((n) => n.id === selectedId);
-    if (note) await invoke("update_note", { id: note.id, title: note.title, body: note.body });
+    const toSave = note && displayedNote(note, unlockedNote);
+    if (toSave) await invoke("update_note", { id: toSave.id, title: toSave.title, body: toSave.body });
   }
 
   function scheduleSave() {
@@ -200,14 +212,14 @@
   }
 
   function setBody(body: string) {
-    if (!selected) return;
-    selected.body = body;
+    if (!shownNote) return;
+    shownNote.body = body;
     scheduleSave();
   }
 
   async function applyTemplate(template: Template) {
-    if (!selected) return;
-    if (!selected.title.trim()) selected.title = template.title;
+    if (!shownNote) return;
+    if (!shownNote.title.trim()) shownNote.title = template.title;
     setBody(template.body);
     await tick();
     editor?.focus(true);
@@ -586,6 +598,11 @@
                 {#if note.pinned}
                   <svg class="pin-icon" viewBox="0 0 20 20" aria-label="Fissata"><path d="M7.5 2.5h5l-.8 4.2 2.8 2.8v1.5H5.5V9.5l2.8-2.8-.8-4.2ZM10 11v6.5" /></svg>
                 {/if}
+                {#if note.locked}
+                  <svg class="pin-icon" viewBox="0 0 20 20" aria-label="Protetta con PIN">
+                    <rect x="4.5" y="9" width="11" height="8" rx="2.2" /><path d="M6.5 9V6.5a3.5 3.5 0 0 1 7 0V9" />
+                  </svg>
+                {/if}
                 {note.title || "Senza titolo"}
               </span>
               <span class="preview">
@@ -642,6 +659,7 @@
   <main class="detail-pane">
     {#if selected}
       {#key selected.id}
+        {@const shown = shownNote!}
         <article class="detail" style:--note={selected.color} style:--accent={vivid(selected.color)}>
           <header>
             <div class="status">
@@ -716,6 +734,12 @@
                     <path d="M3.5 10a6.5 6.5 0 1 0 1.9-4.6M3.5 3.5v2.4h2.4M10 6.5V10l2.5 1.8" />
                   </svg>
                 </button>
+                <LockButton
+                  note={selected}
+                  unlocked={unlockedNote}
+                  onunlocked={(real) => (unlockedNote = real)}
+                  onlockedchange={(l) => (selected.locked = l)}
+                />
                 <TimerButton noteId={selected.id} />
                 <ReminderPicker
                   remindAt={selected.remind_at}
@@ -744,7 +768,9 @@
             <ReminderLine note={selected} onaction={reminderAction} onsnooze={snoozeUntil} />
           {/if}
           <div class="paper" class:readonly={selected.deleted_at !== null || selected.gcal_event_id !== null}>
-            {#if selected.event_at !== null}
+            {#if locked}
+              <LockedContent noteId={selected.id} onunlocked={(real) => (unlockedNote = real)} />
+            {:else if selected.event_at !== null}
               <div class="gcal-title">
                 <CalendarTile at={selected.event_at} color={selected.color} size={42} />
                 <h2 class="title">{selected.title || "(senza titolo)"}</h2>
@@ -754,21 +780,23 @@
                 class="title"
                 placeholder="Titolo"
                 bind:this={titleInput}
-                bind:value={selected.title}
+                bind:value={shown.title}
                 oninput={scheduleSave}
                 readonly={selected.deleted_at !== null}
               />
             {/if}
-            <NoteEditor
-              bind:this={editor}
-              value={selected.body}
-              onchange={setBody}
-              onopenlink={openLink}
-              readonly={selected.deleted_at !== null || selected.gcal_event_id !== null}
-              placeholder={selected.gcal_event_id !== null ? "Nessun dettaglio" : undefined}
-            />
-            {#if selected.body === "" && selected.deleted_at === null && selected.gcal_event_id === null}
-              <Templates onpick={applyTemplate} />
+            {#if !locked}
+              <NoteEditor
+                bind:this={editor}
+                value={shown.body}
+                onchange={setBody}
+                onopenlink={openLink}
+                readonly={selected.deleted_at !== null || selected.gcal_event_id !== null}
+                placeholder={selected.gcal_event_id !== null ? "Nessun dettaglio" : undefined}
+              />
+              {#if shown.body === "" && selected.deleted_at === null && selected.gcal_event_id === null}
+                <Templates onpick={applyTemplate} />
+              {/if}
             {/if}
           </div>
           {#if backlinks.length > 0}

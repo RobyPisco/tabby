@@ -11,7 +11,7 @@
   import { onMount } from "svelte";
   import { findUpdate, type Release } from "$lib/updates";
   import { COLOR_NAMES, COLORS, vivid } from "$lib/notes";
-  import { FONTS, saveSettings, settings, type Settings } from "$lib/settings.svelte";
+  import { FONTS, hasPin, saveSettings, settings, type Settings } from "$lib/settings.svelte";
 
   let { onclose }: { onclose: () => void } = $props();
 
@@ -42,6 +42,12 @@
   let backupResult = $state("");
   let confirmRestore = $state<string | null>(null);
   let restoring = $state(false);
+  // Protezione con PIN
+  let changingPin = $state(false);
+  let oldPin = $state("");
+  let newPin = $state("");
+  let newPinConfirm = $state("");
+  let confirmResetPin = $state(false);
 
   const GCAL_RANGES: [string, string][] = [
     ["1w", "1 settimana"],
@@ -103,6 +109,35 @@
     error = "";
     try {
       await saveSettings(changes);
+    } catch (e) {
+      error = String(e);
+    }
+  }
+
+  async function submitChangePin() {
+    error = "";
+    if (newPin !== newPinConfirm) {
+      error = "I due PIN non coincidono";
+      return;
+    }
+    try {
+      await invoke("change_pin", { oldPin, newPin });
+      changingPin = false;
+      oldPin = newPin = newPinConfirm = "";
+    } catch (e) {
+      error = String(e);
+    }
+  }
+
+  async function resetPin() {
+    if (!confirmResetPin) {
+      confirmResetPin = true;
+      return;
+    }
+    error = "";
+    try {
+      await invoke("reset_pin");
+      confirmResetPin = false;
     } catch (e) {
       error = String(e);
     }
@@ -452,6 +487,51 @@
               ? "Ogni nota nuova prende il colore successivo."
               : `Le note nuove saranno ${COLOR_NAMES[settings.new_note_color]?.toLowerCase() ?? ""}. Puoi sempre cambiarlo dalla nota.`}
           </small>
+        </div>
+
+        <h4>🔒 Protezione con PIN</h4>
+        <div class="group">
+          {#if !hasPin()}
+            <small class="desc pad">
+              Nessun PIN impostato. Attiva "Proteggi con PIN" su una nota per impostarne uno.
+            </small>
+          {:else if changingPin}
+            <label class="row">
+              <span>PIN attuale</span>
+              <input type="password" inputmode="numeric" maxlength="6" bind:value={oldPin} />
+            </label>
+            <label class="row">
+              <span>Nuovo PIN</span>
+              <input type="password" inputmode="numeric" maxlength="6" bind:value={newPin} />
+            </label>
+            <label class="row">
+              <span>Conferma nuovo PIN</span>
+              <input type="password" inputmode="numeric" maxlength="6" bind:value={newPinConfirm} />
+            </label>
+            <div class="row">
+              <button class="plain" onclick={submitChangePin}>Cambia PIN</button>
+              <button
+                class="plain"
+                onclick={() => {
+                  changingPin = false;
+                  oldPin = newPin = newPinConfirm = "";
+                }}
+              >
+                Annulla
+              </button>
+            </div>
+          {:else}
+            <div class="row">
+              <span>Le note protette richiedono questo PIN per essere lette o modificate.</span>
+              <button class="plain" onclick={() => (changingPin = true)}>Cambia PIN</button>
+            </div>
+            <div class="row">
+              <span>Hai dimenticato il PIN? Il contenuto non si perde, ma tutte le note perdono la protezione.</span>
+              <button class:danger={confirmResetPin} onclick={resetPin}>
+                {confirmResetPin ? "Conferma rimozione" : "Rimuovi protezione da tutte le note"}
+              </button>
+            </div>
+          {/if}
         </div>
       {:else if tab === "reminders"}
         <h4>Notifiche</h4>

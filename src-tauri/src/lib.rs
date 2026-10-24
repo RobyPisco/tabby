@@ -7,6 +7,7 @@ mod gcal;
 mod http;
 mod media;
 mod organize;
+mod pin;
 mod quiet;
 mod reminders;
 mod settings;
@@ -55,7 +56,12 @@ fn set_interactive(window: WebviewWindow, interactive: bool) -> Result<(), Strin
 
 #[tauri::command]
 fn list_notes(db: State<Db>, settings: State<SettingsState>) -> Result<Vec<Note>, String> {
-    db.list_deck(settings.get().gcal_deck_days).map_err(|e| e.to_string())
+    Ok(db
+        .list_deck(settings.get().gcal_deck_days)
+        .map_err(|e| e.to_string())?
+        .into_iter()
+        .map(db::redact_if_locked)
+        .collect())
 }
 
 #[tauri::command]
@@ -66,8 +72,12 @@ fn search_notes(
     folder: Option<i64>,
     tag: Option<String>,
 ) -> Result<Vec<Note>, String> {
-    db.search(&query, filter, folder, tag.as_deref())
-        .map_err(|e| e.to_string())
+    Ok(db
+        .search(&query, filter, folder, tag.as_deref())
+        .map_err(|e| e.to_string())?
+        .into_iter()
+        .map(db::redact_if_locked)
+        .collect())
 }
 
 #[tauri::command]
@@ -144,7 +154,51 @@ fn list_titles(db: State<Db>) -> Result<Vec<NoteRef>, String> {
 
 #[tauri::command]
 fn find_note_by_title(db: State<Db>, title: String) -> Result<Option<Note>, String> {
-    db.find_by_title(&title).map_err(|e| e.to_string())
+    Ok(db.find_by_title(&title).map_err(|e| e.to_string())?.map(db::redact_if_locked))
+}
+
+/// Attiva/disattiva la protezione con PIN sulla nota (vedi GLOSSARY.md "Nota protetta").
+#[tauri::command]
+fn set_note_locked(window: WebviewWindow, db: State<Db>, id: i64, locked: bool) -> Result<(), String> {
+    db.set_locked(id, locked).map_err(|e| e.to_string())?;
+    notify_changed(&window);
+    Ok(())
+}
+
+/// Verifica il PIN e restituisce il contenuto reale della nota, solo per questa richiesta:
+/// nessuno stato "sbloccato" persiste lato backend (ADR-0001).
+#[tauri::command]
+fn unlock_note(db: State<Db>, settings: State<SettingsState>, id: i64, pin: String) -> Result<Note, String> {
+    if !settings.get().verify_pin(&pin) {
+        return Err("PIN sbagliato".into());
+    }
+    db.get(id).map_err(|e| e.to_string())
+}
+
+/// Imposta il PIN globale la prima volta (errore se uno esiste già: usa `change_pin`).
+#[tauri::command]
+fn set_pin(app: AppHandle, state: State<SettingsState>, pin: String) -> Result<(), String> {
+    let saved = state.set_pin(&pin)?;
+    let _ = app.emit("settings-changed", saved);
+    Ok(())
+}
+
+#[tauri::command]
+fn change_pin(app: AppHandle, state: State<SettingsState>, old_pin: String, new_pin: String) -> Result<(), String> {
+    let saved = state.change_pin(&old_pin, &new_pin)?;
+    let _ = app.emit("settings-changed", saved);
+    Ok(())
+}
+
+/// Reset del PIN dimenticato: rimuove la protezione da tutte le note (il contenuto non si
+/// perde, essendo sempre stato in chiaro, vedi ADR-0001). Nessuna verifica richiesta.
+#[tauri::command]
+fn reset_pin(app: AppHandle, db: State<Db>, state: State<SettingsState>) -> Result<(), String> {
+    let saved = state.clear_pin()?;
+    db.unlock_all().map_err(|e| e.to_string())?;
+    let _ = app.emit("settings-changed", saved);
+    notify_changed_from(&app, "reset_pin");
+    Ok(())
 }
 
 #[tauri::command]
@@ -603,6 +657,11 @@ pub fn run() {
             backup_folder,
             open_backup_folder,
             set_pinned,
+            set_note_locked,
+            unlock_note,
+            set_pin,
+            change_pin,
+            reset_pin,
             list_folders,
             folder_counts,
             create_folder,

@@ -14,6 +14,9 @@
   import Templates from "$lib/Templates.svelte";
   import TimerButton from "$lib/TimerButton.svelte";
   import { formatLeft, initTimer, timer } from "$lib/timer.svelte";
+  import LockButton from "$lib/LockButton.svelte";
+  import LockedContent from "$lib/LockedContent.svelte";
+  import { displayedNote } from "$lib/lock";
   import {
     isOverdue,
     onNotesChangedElsewhere,
@@ -39,6 +42,12 @@
   let notes = $state<Note[]>([]);
   let phase = $state<Phase>("rest");
   let openId = $state<number | null>(null);
+  /** Contenuto reale della nota aperta, dopo aver verificato il PIN per questa apertura. */
+  let unlockedNote = $state<Note | null>(null);
+  $effect(() => {
+    openId;
+    unlockedNote = null;
+  });
   let winHeight = $state(800);
   let editing = $state(false);
   let titleInput = $state<HTMLTextAreaElement>();
@@ -153,12 +162,19 @@
     return x >= (noteOpen ? dockW - TAB_WIDTH - noteW - 12 : deckLeft);
   }
 
+  /** La nota com'è mostrata ora: il contenuto reale se protetta e già sbloccata in questa
+   *  apertura, altrimenti quella (eventualmente redatta dal backend) arrivata in `notes`. */
+  function currentNote(): Note | null {
+    const note = notes.find((n) => n.id === openId);
+    return note ? displayedNote(note, unlockedNote) : null;
+  }
+
   /** Salva subito la nota in sospeso (chiamata alla chiusura e prima di archiviare). */
   async function flushSave() {
     if (saveTimer === undefined) return;
     clearTimeout(saveTimer);
     saveTimer = undefined;
-    const note = notes.find((n) => n.id === openId);
+    const note = currentNote();
     if (note) await invoke("update_note", { id: note.id, title: note.title, body: note.body });
   }
 
@@ -166,7 +182,7 @@
     clearTimeout(saveTimer);
     saveTimer = setTimeout(() => {
       saveTimer = undefined;
-      const note = notes.find((n) => n.id === openId);
+      const note = currentNote();
       if (note) invoke("update_note", { id: note.id, title: note.title, body: note.body });
     }, SAVE_DEBOUNCE_MS);
   }
@@ -312,8 +328,9 @@
 
   /** Il titolo va a capo per intero, ma resta una riga sola: niente "a capo" incollati. */
   function onTitleInput() {
-    if (!openNote) return;
-    if (/[\r\n]/.test(openNote.title)) openNote.title = openNote.title.replace(/[\r\n]+/g, " ");
+    const note = currentNote();
+    if (!note) return;
+    if (/[\r\n]/.test(note.title)) note.title = note.title.replace(/[\r\n]+/g, " ");
     scheduleSave();
   }
 
@@ -325,8 +342,9 @@
   }
 
   function setBody(body: string) {
-    if (!openNote) return;
-    openNote.body = body;
+    const note = currentNote();
+    if (!note) return;
+    note.body = body;
     scheduleSave();
   }
 
@@ -356,8 +374,9 @@
   }
 
   async function applyTemplate(template: Template) {
-    if (!openNote) return;
-    if (!openNote.title.trim()) openNote.title = template.title;
+    const note = currentNote();
+    if (!note) return;
+    if (!note.title.trim()) note.title = template.title;
     setBody(template.body);
     await tick();
     editor?.focus(true);
@@ -483,6 +502,11 @@
           <span class="dot"></span>
         {/if}
         <span class="label">{note.title || "Senza titolo"}</span>
+        {#if note.locked}
+          <svg class="tab-lock" viewBox="0 0 20 20" aria-hidden="true" aria-label="Protetta con PIN">
+            <rect x="4.5" y="9" width="11" height="8" rx="2.2" /><path d="M6.5 9V6.5a3.5 3.5 0 0 1 7 0V9" />
+          </svg>
+        {/if}
         {#if note.pinned}
           <svg class="tab-pin" viewBox="0 0 20 20" aria-hidden="true"><path d="M7.5 2.5h5l-.8 4.2 2.8 2.8v1.5H5.5V9.5l2.8-2.8-.8-4.2ZM10 11v6.5" /></svg>
         {/if}
@@ -516,6 +540,8 @@
   <!-- Nota aperta a piena dimensione -->
   {#if openNote}
     {#key openNote.id}
+      {@const locked = openNote.locked && !unlockedNote}
+      {@const shownNote = displayedNote(openNote, unlockedNote)}
       <div class="note-wrap" style:top="{noteTop}px">
       <article
         class="note"
@@ -557,6 +583,14 @@
           >
             <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M7.5 2.5h5l-.8 4.2 2.8 2.8v1.5H5.5V9.5l2.8-2.8-.8-4.2ZM10 11v6.5" /></svg>
           </button>
+          {#if openNote.gcal_event_id === null}
+            <LockButton
+              note={openNote}
+              unlocked={unlockedNote}
+              onunlocked={(real) => (unlockedNote = real)}
+              onlockedchange={(l) => (openNote.locked = l)}
+            />
+          {/if}
           <TimerButton noteId={openNote.id} />
           <ReminderPicker
             remindAt={openNote.remind_at}
@@ -571,35 +605,39 @@
             <button class="archive" onclick={trashOpen} title="Sposta nel cestino">Elimina</button>
           {/if}
         </header>
-        {#if openNote.gcal_event_id === null}
-          <textarea
-            class="title"
-            rows="1"
-            placeholder="Titolo"
-            bind:this={titleInput}
-            bind:value={openNote.title}
-            oninput={onTitleInput}
-            onkeydown={onTitleKeydown}
-          ></textarea>
-        {:else}
+        {#if openNote.gcal_event_id !== null}
           <div class="gcal-title">
             {#if openNote.event_at !== null}
               <CalendarTile at={openNote.event_at} color={openNote.color} />
             {/if}
             <h2>{openNote.title || "(senza titolo)"}</h2>
           </div>
-        {/if}
-        <ReminderLine note={openNote} onaction={reminderAction} onsnooze={snoozeUntil} bind:snoozeOpen />
-        <NoteEditor
-          bind:this={editor}
-          value={openNote.body}
-          onchange={setBody}
-          onopenlink={openLink}
-          readonly={openNote.gcal_event_id !== null}
-          placeholder={openNote.gcal_event_id !== null ? "Nessun dettaglio" : undefined}
-        />
-        {#if openNote.body === "" && openNote.gcal_event_id === null}
-          <Templates onpick={applyTemplate} />
+          <ReminderLine note={openNote} onaction={reminderAction} onsnooze={snoozeUntil} bind:snoozeOpen />
+          <NoteEditor
+            bind:this={editor}
+            value={openNote.body}
+            onchange={setBody}
+            onopenlink={openLink}
+            readonly
+            placeholder="Nessun dettaglio"
+          />
+        {:else if locked}
+          <LockedContent noteId={openNote.id} onunlocked={(real) => (unlockedNote = real)} />
+        {:else}
+          <textarea
+            class="title"
+            rows="1"
+            placeholder="Titolo"
+            bind:this={titleInput}
+            bind:value={shownNote.title}
+            oninput={onTitleInput}
+            onkeydown={onTitleKeydown}
+          ></textarea>
+          <ReminderLine note={openNote} onaction={reminderAction} onsnooze={snoozeUntil} bind:snoozeOpen />
+          <NoteEditor bind:this={editor} value={shownNote.body} onchange={setBody} onopenlink={openLink} />
+          {#if shownNote.body === ""}
+            <Templates onpick={applyTemplate} />
+          {/if}
         {/if}
       </article>
       </div>
@@ -788,12 +826,14 @@
     text-shadow: 0 1px 2px rgba(0, 0, 0, 0.55);
   }
   .tab-pin,
+  .tab-lock,
   .tab-bell {
     flex: none;
     width: 13px;
     height: 13px;
   }
-  .tab-pin {
+  .tab-pin,
+  .tab-lock {
     fill: none;
     stroke: rgba(255, 255, 255, 0.75);
     stroke-width: 1.8;

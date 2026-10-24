@@ -28,6 +28,9 @@ pub struct Note {
     pub gcal_event_id: Option<String>,
     /// Inizio dell'evento Google Calendar (non risente del posticipo); `None` per le note normali.
     pub event_at: Option<i64>,
+    /// Protetta da PIN: titolo/corpo vanno oscurati ovunque, finché non si verifica il PIN
+    /// per questa apertura (vedi `redact_if_locked` e ADR-0001).
+    pub locked: bool,
 }
 
 /// Promemoria scaduto da notificare.
@@ -36,6 +39,8 @@ pub struct DueReminder {
     pub title: String,
     pub body: String,
     pub due_at: i64,
+    /// Nota protetta: il testo della notifica non deve rivelare titolo/corpo.
+    pub locked: bool,
 }
 
 pub struct Db(pub Mutex<Connection>);
@@ -63,12 +68,26 @@ pub(crate) fn row_to_note(row: &Row) -> rusqlite::Result<Note> {
         folder_id: row.get(11)?,
         gcal_event_id: row.get(12)?,
         event_at: row.get(13)?,
+        locked: row.get::<_, i64>(14)? != 0,
     })
 }
 
 pub(crate) const COLUMNS: &str = "id, title, body, color, archived, created_at, updated_at, deleted_at, \
                        COALESCE(snoozed_until, due_at), repeat, pinned, folder_id, gcal_event_id, \
-                       CASE WHEN gcal_event_id IS NOT NULL THEN due_at END";
+                       CASE WHEN gcal_event_id IS NOT NULL THEN due_at END, locked";
+
+/// Titolo/corpo oscurati se la nota è protetta e non ancora sbloccata per questa apertura;
+/// nota intatta altrimenti. Usata ovunque le note lasciano il backend per liste/anteprime.
+pub(crate) fn redact_if_locked(note: Note) -> Note {
+    if !note.locked {
+        return note;
+    }
+    Note {
+        title: crate::pin::PLACEHOLDER.to_string(),
+        body: String::new(),
+        ..note
+    }
+}
 /// Ordine degli elenchi: fissate in cima, poi le note normali (`notes_order`),
 /// poi gli eventi di Google Calendar dal più vicino al più lontano.
 fn list_order(notes_order: &str) -> String {
@@ -134,6 +153,7 @@ fn migrate(conn: &Connection) -> rusqlite::Result<()> {
     // 1 = nota messa nel cestino dalla sync (evento sparito da Google), non dall'utente:
     // se l'evento ricompare, la sync la ripristina.
     add_column_if_missing(conn, "gcal_stale", "INTEGER NOT NULL DEFAULT 0")?;
+    add_column_if_missing(conn, "locked", "INTEGER NOT NULL DEFAULT 0")?;
     crate::organize::create_tables(conn)?;
     // Indice univoco per gcal_event_id: evita duplicati alla sync.
     conn.execute_batch(
@@ -418,6 +438,21 @@ impl Db {
         Ok(())
     }
 
+    /// Attiva/disattiva la protezione con PIN sulla nota.
+    pub fn set_locked(&self, id: i64, locked: bool) -> rusqlite::Result<()> {
+        let conn = self.0.lock().unwrap();
+        conn.execute("UPDATE notes SET locked = ?2 WHERE id = ?1", params![id, locked as i64])?;
+        Ok(())
+    }
+
+    /// Rimuove la protezione da tutte le note (reset del PIN dimenticato: il contenuto
+    /// non si perde, essendo sempre stato in chiaro, vedi ADR-0001).
+    pub fn unlock_all(&self) -> rusqlite::Result<()> {
+        let conn = self.0.lock().unwrap();
+        conn.execute("UPDATE notes SET locked = 0 WHERE locked = 1", [])?;
+        Ok(())
+    }
+
     /// Sposta nel cestino (`trashed = true`) o ripristina dal cestino.
     pub fn set_trashed(&self, ids: &[i64], trashed: bool) -> rusqlite::Result<()> {
         let mut conn = self.0.lock().unwrap();
@@ -480,7 +515,7 @@ impl Db {
     pub fn due_reminders(&self, now: i64) -> rusqlite::Result<Vec<DueReminder>> {
         let conn = self.0.lock().unwrap();
         let mut stmt = conn.prepare(&format!(
-            "SELECT n.id, n.title, n.body, {EFFECTIVE_DUE} FROM notes n
+            "SELECT n.id, n.title, n.body, {EFFECTIVE_DUE}, n.locked FROM notes n
              JOIN reminders r ON r.note_id = n.id
              WHERE {PENDING} AND {EFFECTIVE_DUE} <= ?1
              ORDER BY {EFFECTIVE_DUE}"
@@ -491,6 +526,7 @@ impl Db {
                 title: r.get(1)?,
                 body: r.get(2)?,
                 due_at: r.get(3)?,
+                locked: r.get::<_, i64>(4)? != 0,
             })
         })?;
         rows.collect()
@@ -500,7 +536,7 @@ impl Db {
     pub fn unhandled_reminders(&self, since: i64) -> rusqlite::Result<Vec<DueReminder>> {
         let conn = self.0.lock().unwrap();
         let mut stmt = conn.prepare(&format!(
-            "SELECT n.id, n.title, n.body, {EFFECTIVE_DUE} FROM notes n
+            "SELECT n.id, n.title, n.body, {EFFECTIVE_DUE}, n.locked FROM notes n
              JOIN reminders r ON r.note_id = n.id
              WHERE n.deleted_at IS NULL AND n.archived = 0
                AND r.fired_at >= {EFFECTIVE_DUE} AND {EFFECTIVE_DUE} >= ?1
@@ -512,6 +548,7 @@ impl Db {
                 title: r.get(1)?,
                 body: r.get(2)?,
                 due_at: r.get(3)?,
+                locked: r.get::<_, i64>(4)? != 0,
             })
         })?;
         rows.collect()
@@ -629,6 +666,27 @@ mod tests {
     }
 
     #[test]
+    fn redact_if_locked_leaves_an_unlocked_note_untouched() {
+        let note = db().create_full("Titolo", "corpo", "#fff").unwrap();
+        let redacted = redact_if_locked(note.clone());
+        assert_eq!(redacted.title, note.title);
+        assert_eq!(redacted.body, note.body);
+    }
+
+    #[test]
+    fn redact_if_locked_hides_title_and_body_of_a_locked_note() {
+        let mut note = db().create_full("Titolo", "corpo", "#fff").unwrap();
+        note.locked = true;
+        let id = note.id;
+        let color = note.color.clone();
+        let redacted = redact_if_locked(note);
+        assert_eq!(redacted.title, crate::pin::PLACEHOLDER);
+        assert_eq!(redacted.body, "");
+        assert_eq!(redacted.id, id);
+        assert_eq!(redacted.color, color);
+    }
+
+    #[test]
     fn seeds_welcome_notes_once() {
         let db = db();
         assert_eq!(db.list_active().unwrap().len(), 2);
@@ -729,6 +787,25 @@ mod tests {
         assert_eq!(db.get(source.id).unwrap().body, "vedi [[Lista della spesa]] per sabato");
         assert_eq!(db.backlinks(target.id).unwrap()[0].id, source.id);
         assert_eq!(db.find_by_title("lista della SPESA").unwrap().map(|n| n.id), Some(target.id));
+    }
+
+    #[test]
+    fn backlinks_and_titles_hide_the_title_of_a_locked_referring_note() {
+        let db = db();
+        let target = db.create_full("Spesa", "", "#fff").unwrap();
+        let source = db.create_full("Menu segreto", "vedi [[spesa]] per sabato", "#fff").unwrap();
+        db.set_locked(source.id, true).unwrap();
+
+        let backlinks = db.backlinks(target.id).unwrap();
+        assert_eq!(backlinks.len(), 1);
+        assert_eq!(backlinks[0].title, crate::pin::PLACEHOLDER);
+
+        let titles = db.list_titles().unwrap();
+        let source_ref = titles.iter().find(|t| t.id == source.id).unwrap();
+        assert_eq!(source_ref.title, crate::pin::PLACEHOLDER);
+        // Il target non è protetto: il suo titolo resta quello vero.
+        let target_ref = titles.iter().find(|t| t.id == target.id).unwrap();
+        assert_eq!(target_ref.title, "Spesa");
     }
 
     #[test]

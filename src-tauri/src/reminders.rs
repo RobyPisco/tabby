@@ -110,20 +110,26 @@ fn repeat_unhandled(app: &AppHandle) {
 }
 
 fn show_toast(app: &AppHandle, reminder: &DueReminder) {
-    let title = if reminder.title.trim().is_empty() {
-        "Promemoria"
+    // Nota protetta: niente di titolo/corpo deve finire in una notifica di sistema.
+    let (title, preview): (&str, String) = if reminder.locked {
+        ("🔒 Promemoria da una nota protetta", String::new())
     } else {
-        reminder.title.trim()
+        let title = if reminder.title.trim().is_empty() {
+            "Promemoria"
+        } else {
+            reminder.title.trim()
+        };
+        let preview = reminder
+            .body
+            .lines()
+            .map(str::trim)
+            .find(|l| !l.is_empty())
+            .unwrap_or("")
+            .chars()
+            .take(120)
+            .collect();
+        (title, preview)
     };
-    let preview: String = reminder
-        .body
-        .lines()
-        .map(str::trim)
-        .find(|l| !l.is_empty())
-        .unwrap_or("")
-        .chars()
-        .take(120)
-        .collect();
     let when = Local
         .timestamp_opt(reminder.due_at, 0)
         .single()

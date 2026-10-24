@@ -38,6 +38,11 @@ pub struct NoteRef {
     pub title: String,
 }
 
+/// Titolo oscurato con lo stesso placeholder di `db::redact_if_locked` se la nota è protetta.
+fn note_ref(id: i64, title: String, locked: bool) -> NoteRef {
+    NoteRef { id, title: if locked { crate::pin::PLACEHOLDER.to_string() } else { title } }
+}
+
 #[derive(Serialize)]
 pub struct Version {
     pub id: i64,
@@ -256,13 +261,15 @@ impl Db {
     }
 
     /// Titoli per l'autocompletamento dei link [[...]].
+    /// Titoli per l'autocompletamento dei link [[titolo]]: quello di una nota protetta
+    /// resta oscurato come ovunque (vedi `db::redact_if_locked`, GLOSSARY.md "Nota protetta").
     pub fn list_titles(&self) -> rusqlite::Result<Vec<NoteRef>> {
         let conn = self.0.lock().unwrap();
         let mut stmt = conn.prepare(
-            "SELECT id, title FROM notes WHERE deleted_at IS NULL AND title <> ''
+            "SELECT id, title, locked FROM notes WHERE deleted_at IS NULL AND title <> ''
              ORDER BY updated_at DESC",
         )?;
-        let rows = stmt.query_map([], |r| Ok(NoteRef { id: r.get(0)?, title: r.get(1)? }))?;
+        let rows = stmt.query_map([], |r| Ok(note_ref(r.get(0)?, r.get(1)?, r.get::<_, i64>(2)? != 0)))?;
         rows.collect()
     }
 
@@ -282,16 +289,19 @@ impl Db {
     }
 
     /// Note che contengono un link [[titolo]] verso questa.
+    /// Note che citano quella data: il titolo di una nota protetta resta oscurato, come ovunque.
     pub fn backlinks(&self, id: i64) -> rusqlite::Result<Vec<NoteRef>> {
         let conn = self.0.lock().unwrap();
         let mut stmt = conn.prepare(
-            "SELECT n.id, n.title FROM notes n, notes target
+            "SELECT n.id, n.title, n.locked FROM notes n, notes target
              WHERE target.id = ?1 AND target.title <> '' AND n.id <> target.id
                AND n.deleted_at IS NULL
                AND instr(lower(n.body), lower('[[' || trim(target.title) || ']]')) > 0
              ORDER BY n.updated_at DESC",
         )?;
-        let rows = stmt.query_map([id], |r| Ok(NoteRef { id: r.get(0)?, title: r.get(1)? }))?;
+        let rows = stmt.query_map([id], |r| {
+            Ok(note_ref(r.get(0)?, r.get(1)?, r.get::<_, i64>(2)? != 0))
+        })?;
         rows.collect()
     }
 
