@@ -9,8 +9,7 @@
   let button = $state<HTMLButtonElement>();
   let custom = $state(20);
 
-  const mine = $derived(timer.current?.note_id === noteId ? timer.current : null);
-  const elsewhere = $derived(timer.current !== null && timer.current.note_id !== noteId);
+  const mine = $derived(timer.active[noteId] ?? null);
 
   const FOCUS = [15, 25, 50];
   const BREAKS = [5, 15];
@@ -46,29 +45,26 @@
     aria-haspopup="dialog"
     aria-expanded={open}
     aria-label="Timer"
-    title={mine ? `${mine.kind === "focus" ? "Concentrazione" : "Pausa"}: mancano ${formatLeft(timer.left)}` : "Timer / pomodoro"}
+    title={mine ? `${mine.kind === "focus" ? "Concentrazione" : "Pausa"}: mancano ${formatLeft(mine.left)}` : "Timer / pomodoro"}
   >
     <svg viewBox="0 0 20 20" aria-hidden="true">
       <circle cx="10" cy="11" r="6.5" />
       <path d="M10 7.5V11l2 1.5M8 2.5h4" />
     </svg>
-    {#if mine}<span class="left">{formatLeft(timer.left)}</span>{/if}
+    {#if mine}<span class="left">{formatLeft(mine.left)}</span>{/if}
   </button>
 
   {#if open}
     <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
     <div class="panel" role="dialog" aria-label="Timer" tabindex="-1" onkeydown={onKeydown}>
       {#if mine}
-        <p class="big">{formatLeft(timer.left)}</p>
+        <p class="big">{formatLeft(mine.left)}</p>
         <p class="sub">{mine.kind === "focus" ? "🍅 Concentrazione" : "☕ Pausa"} · {mine.minutes} min</p>
         <div class="row">
-          <button onclick={() => invoke("timer_extend", { minutes: 5 })}>+5 min</button>
-          <button class="stop" onclick={() => { open = false; invoke("timer_stop"); }}>Ferma</button>
+          <button onclick={() => invoke("timer_extend", { noteId, minutes: 5 })}>+5 min</button>
+          <button class="stop" onclick={() => { open = false; invoke("timer_stop", { noteId }); }}>Ferma</button>
         </div>
       {:else}
-        {#if elsewhere}
-          <p class="note">C'è già un timer su un'altra nota: partendo qui lo sostituisci.</p>
-        {/if}
         <span class="label">🍅 Concentrazione</span>
         <div class="row">
           {#each FOCUS as m (m)}
@@ -215,14 +211,11 @@
     color: #6b6b76;
     text-align: center;
   }
-  .note,
   .hint {
     margin: 0;
+    margin-top: 2px;
     color: #6b6b76;
     font-size: 12px;
-  }
-  .hint {
-    margin-top: 2px;
   }
   button:focus-visible,
   input:focus-visible {

@@ -453,7 +453,7 @@
       <span
         style:--c={vivid(note.color)}
         class:due={isOverdue(note, clock.now)}
-        class:timing={timer.current?.note_id === note.id}
+        class:timing={note.id in timer.active}
       ></span>
     {/each}
   </div>
@@ -461,6 +461,7 @@
   <!-- Linguette a ventaglio -->
   <div class="deck" style:top="{deckTop}px">
     {#each notes as note, i (note.id)}
+      {@const noteTimer = timer.active[note.id]}
       <button
         class="tab"
         class:shown={phase !== "rest"}
@@ -485,8 +486,8 @@
         {#if note.pinned}
           <svg class="tab-pin" viewBox="0 0 20 20" aria-hidden="true"><path d="M7.5 2.5h5l-.8 4.2 2.8 2.8v1.5H5.5V9.5l2.8-2.8-.8-4.2ZM10 11v6.5" /></svg>
         {/if}
-        {#if timer.current?.note_id === note.id}
-          <span class="tab-timer" class:pause={timer.current.kind === "break"}>{formatLeft(timer.left)}</span>
+        {#if noteTimer}
+          <span class="tab-timer" class:pause={noteTimer.kind === "break"}>{formatLeft(noteTimer.left)}</span>
         {/if}
         {#if note.remind_at !== null}
           <svg class="tab-bell" viewBox="0 0 20 20" aria-hidden="true">

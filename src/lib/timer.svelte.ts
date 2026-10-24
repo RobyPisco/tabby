@@ -4,26 +4,39 @@ import { listen } from "@tauri-apps/api/event";
 /** Stesso formato di `Timer` in src-tauri/src/timer.rs. */
 export type Timer = { note_id: number; kind: "focus" | "break"; minutes: number; ends_at: number };
 
-/** Timer in corso (al massimo uno) e secondi rimasti, aggiornati ogni secondo mentre gira. */
-export const timer = $state<{ current: Timer | null; left: number }>({ current: null, left: 0 });
+/** Secondi rimanenti di un timer dato l'istante corrente (ms); mai negativo. */
+export function secondsLeft(timer: Timer, nowMs: number): number {
+  return Math.max(0, Math.ceil(timer.ends_at - nowMs / 1000));
+}
+
+/** Un timer attivo, con i secondi rimasti ricalcolati ogni secondo. */
+export type ActiveTimer = Timer & { left: number };
+
+/** Timer attivi, uno per nota (chiave: note_id). Più note possono averne uno ciascuna. */
+export const timer = $state<{ active: Record<number, ActiveTimer> }>({ active: {} });
 
 let ticker: ReturnType<typeof setInterval> | undefined;
 
 function tick() {
-  timer.left = timer.current ? Math.max(0, Math.ceil(timer.current.ends_at - Date.now() / 1000)) : 0;
+  const nowMs = Date.now();
+  for (const id in timer.active) {
+    timer.active[id].left = secondsLeft(timer.active[id], nowMs);
+  }
 }
 
-function assign(next: Timer | null) {
-  timer.current = next;
-  tick();
+function assign(timers: Timer[]) {
+  const nowMs = Date.now();
+  const active: Record<number, ActiveTimer> = {};
+  for (const t of timers) active[t.note_id] = { ...t, left: secondsLeft(t, nowMs) };
+  timer.active = active;
   clearInterval(ticker);
-  ticker = next ? setInterval(tick, 1000) : undefined;
+  ticker = timers.length > 0 ? setInterval(tick, 1000) : undefined;
 }
 
-/** Da chiamare all'avvio di ogni finestra che mostra il timer. */
+/** Da chiamare all'avvio di ogni finestra che mostra i timer. */
 export async function initTimer(): Promise<() => void> {
-  assign(await invoke<Timer | null>("timer_get"));
-  return listen<Timer | null>("timer-changed", ({ payload }) => assign(payload));
+  assign(await invoke<Timer[]>("timer_get"));
+  return listen<Timer[]>("timer-changed", ({ payload }) => assign(payload));
 }
 
 /** "4:05", oppure "1:02:30" oltre l'ora. */

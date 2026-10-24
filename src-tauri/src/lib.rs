@@ -300,8 +300,8 @@ fn dnd_until_morning(state: State<SettingsState>) -> i64 {
 }
 
 #[tauri::command]
-fn timer_get(state: State<timer::TimerState>) -> Option<timer::Timer> {
-    state.get()
+fn timer_get(state: State<timer::TimerState>) -> Vec<timer::Timer> {
+    state.all()
 }
 
 #[tauri::command]
@@ -310,13 +310,13 @@ fn timer_start(app: AppHandle, note_id: i64, minutes: u32, kind: String) -> Resu
 }
 
 #[tauri::command]
-fn timer_extend(app: AppHandle, minutes: u32) -> Option<timer::Timer> {
-    timer::extend(&app, minutes)
+fn timer_extend(app: AppHandle, note_id: i64, minutes: u32) -> Option<timer::Timer> {
+    timer::extend(&app, note_id, minutes)
 }
 
 #[tauri::command]
-fn timer_stop(app: AppHandle) {
-    timer::stop(&app);
+fn timer_stop(app: AppHandle, note_id: i64) {
+    timer::stop(&app, note_id);
 }
 
 #[tauri::command]
@@ -663,7 +663,7 @@ pub fn run() {
             // Lo scheduler notifica subito anche i promemoria scaduti ad app chiusa.
             let scheduler = reminders::start(app.handle());
             app.manage(scheduler);
-            timer::setup(app.handle());
+            app.manage(timer::setup(app.handle()));
             backup::start(app.handle());
 
             // Google Calendar: carica il token salvato e avvia il syncer.
