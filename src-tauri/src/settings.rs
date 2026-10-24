@@ -75,6 +75,9 @@ pub struct Settings {
     pub quiet_to: String,
     /// Ora a cui scatta "Domani" quando si posticipa un promemoria ("HH:MM").
     pub tomorrow_time: String,
+    /// Posizione verticale della pillola sul bordo dx/sx: frazione 0.0 (in alto) - 1.0 (in basso)
+    /// dell'altezza disponibile; 0.5 = centro.
+    pub deck_offset: f64,
 }
 
 impl Default for Settings {
@@ -104,6 +107,7 @@ impl Default for Settings {
             quiet_from: "22:00".into(),
             quiet_to: "08:00".into(),
             tomorrow_time: "09:00".into(),
+            deck_offset: 0.5,
         }
     }
 }
@@ -163,6 +167,7 @@ impl Settings {
             quiet_from: time_or(self.quiet_from, &default.quiet_from),
             quiet_to: time_or(self.quiet_to, &default.quiet_to),
             tomorrow_time: time_or(self.tomorrow_time, &default.tomorrow_time),
+            deck_offset: self.deck_offset.clamp(0.0, 1.0),
         }
     }
 
@@ -245,6 +250,7 @@ mod tests {
             editor_font: "comic".into(),
             new_note_color: "#000000".into(),
             deck_transparency: 500,
+            deck_offset: -1.0,
             ..Settings::default()
         }
         .sanitized();
@@ -253,6 +259,19 @@ mod tests {
         assert_eq!(s.editor_font, "hand");
         assert_eq!(s.new_note_color, "cycle");
         assert_eq!(s.deck_transparency, 100);
+        assert_eq!(s.deck_offset, 0.0);
+    }
+
+    #[test]
+    fn deck_offset_valid_value_is_kept() {
+        let s = Settings { deck_offset: 0.3, ..Settings::default() }.sanitized();
+        assert_eq!(s.deck_offset, 0.3);
+    }
+
+    #[test]
+    fn deck_offset_above_range_falls_back_to_max() {
+        let s = Settings { deck_offset: 2.0, ..Settings::default() }.sanitized();
+        assert_eq!(s.deck_offset, 1.0);
     }
 
     #[test]

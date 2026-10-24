@@ -7,7 +7,8 @@
   import ColorPicker from "$lib/ColorPicker.svelte";
   import NoteEditor from "$lib/NoteEditor.svelte";
   import { saveFile } from "$lib/editor/media";
-  import { colorForNewNote, dockWidth, initSettings, settings } from "$lib/settings.svelte";
+  import { colorForNewNote, dockWidth, initSettings, saveSettings, settings } from "$lib/settings.svelte";
+  import { isDrag, offsetToTop, RECENTER_OFFSET, topToOffset } from "$lib/deckPosition";
   import ReminderLine from "$lib/ReminderLine.svelte";
   import ReminderPicker from "$lib/ReminderPicker.svelte";
   import Templates from "$lib/Templates.svelte";
@@ -75,13 +76,59 @@
   const glassAlpha = $derived(
     GLASS_ALPHA.dense - (settings.deck_transparency / 100) * (GLASS_ALPHA.dense - GLASS_ALPHA.clear),
   );
+  const deckHeight = $derived(Math.max(notes.length * (tabHeight + TAB_GAP) - TAB_GAP, 40));
+  /** Durante il trascinamento della pillola, sostituisce temporaneamente la posizione salvata. */
+  let dragTop = $state<number | null>(null);
+  const deckTop = $derived(dragTop ?? offsetToTop(settings.deck_offset, winHeight, deckHeight, DECK_MARGIN));
   const noteTop = $derived.by(() => {
-    const top = Math.max((winHeight - deckHeight) / 2, 8) - 20;
+    const top = deckTop - 20;
     return Math.max(12, Math.min(top, winHeight - noteH - 12));
   });
-  const deckHeight = $derived(Math.max(notes.length * (tabHeight + TAB_GAP) - TAB_GAP, 40));
-  const deckTop = $derived(Math.max((winHeight - deckHeight) / 2, 8));
   const openNote = $derived(notes.find((n) => n.id === openId) ?? null);
+
+  /** Trascinamento verticale della pillola (solo fasi "rest"/"fan": non mentre una nota è aperta). */
+  let dragStart: { clientY: number; startTop: number } | null = null;
+  let dragMoved = false;
+
+  /** Frazione corrispondente allo spostamento verticale `dy` dall'inizio del drag, nei limiti 0-1. */
+  function fractionForDy(dy: number): number {
+    if (!dragStart) return settings.deck_offset;
+    return Math.min(1, Math.max(0, topToOffset(dragStart.startTop + dy, winHeight, deckHeight, DECK_MARGIN)));
+  }
+
+  function onPillMouseDown(e: MouseEvent) {
+    if (phase === "open") return;
+    dragMoved = false;
+    dragStart = { clientY: e.clientY, startTop: offsetToTop(settings.deck_offset, winHeight, deckHeight, DECK_MARGIN) };
+    window.addEventListener("mousemove", onPillMouseMove);
+    window.addEventListener("mouseup", onPillMouseUp);
+  }
+
+  function onPillMouseMove(e: MouseEvent) {
+    if (!dragStart) return;
+    const dy = e.clientY - dragStart.clientY;
+    if (!dragMoved && !isDrag(0, dy)) return;
+    dragMoved = true;
+    dragTop = offsetToTop(fractionForDy(dy), winHeight, deckHeight, DECK_MARGIN);
+  }
+
+  // Un solo salvataggio al rilascio del mouse (non ad ogni pixel trascinato): non serve il debounce
+  // usato invece per il testo delle note, pensato per un flusso continuo di modifiche (SAVE_DEBOUNCE_MS).
+  async function onPillMouseUp(e: MouseEvent) {
+    window.removeEventListener("mousemove", onPillMouseMove);
+    window.removeEventListener("mouseup", onPillMouseUp);
+    if (dragMoved && dragStart) {
+      await saveSettings({ deck_offset: fractionForDy(e.clientY - dragStart.clientY) });
+    }
+    dragStart = null;
+    dragMoved = false;
+    dragTop = null;
+  }
+
+  function onPillDoubleClick() {
+    if (phase === "open") return;
+    saveSettings({ deck_offset: RECENTER_OFFSET });
+  }
 
   function setInteractive(value: boolean) {
     if (interactive === value) return;
@@ -393,8 +440,15 @@
   ondragover={onDragOver}
   ondrop={onDrop}
 >
-  <!-- Pillola a riposo -->
-  <div class="pill" class:hidden={phase !== "rest"} style:top="{deckTop + deckHeight / 2}px">
+  <!-- Pillola a riposo: anche quando il ventaglio è aperto resta qui, invisibile, come maniglia di trascinamento. -->
+  <!-- svelte-ignore a11y_no_static_element_interactions -->
+  <div
+    class="pill"
+    class:hidden={phase !== "rest"}
+    style:top="{deckTop + deckHeight / 2}px"
+    onmousedown={onPillMouseDown}
+    ondblclick={onPillDoubleClick}
+  >
     {#each notes as note (note.id)}
       <span
         style:--c={vivid(note.color)}
@@ -603,16 +657,21 @@
     user-select: none;
   }
 
-  /* A riposo: sottili barre di luce sul bordo, una per nota. */
+  /* A riposo: sottili barre di luce sul bordo, una per nota. Resta nel DOM (solo invisibile) anche a
+     ventaglio aperto, come maniglia di trascinamento: z-index e padding la tengono sopra alle
+     linguette e le danno un'area cliccabile più larga dei soli 6px dei puntini. */
   .pill {
     position: absolute;
+    z-index: 1;
     right: 5px;
+    padding: 0 8px;
     display: flex;
     flex-direction: column;
     align-items: center;
     gap: 6px;
     transform: translateY(-50%);
     transition: opacity 0.2s;
+    cursor: grab;
   }
   .pill.hidden {
     opacity: 0;

@@ -40,6 +40,8 @@ export type Settings = {
   quiet_to: string;
   /** Ora di "Domani" quando si posticipa ("HH:MM"). */
   tomorrow_time: string;
+  /** Posizione verticale della pillola sul bordo dx/sx: frazione 0.0 (in alto) - 1.0 (in basso); 0.5 = centro. */
+  deck_offset: number;
 };
 
 export const FONTS: Record<Settings["editor_font"], { label: string; css: string }> = {
@@ -74,6 +76,7 @@ export const settings = $state<Settings>({
   quiet_from: "22:00",
   quiet_to: "08:00",
   tomorrow_time: "09:00",
+  deck_offset: 0.5,
 });
 
 /** "09:00" → ore e minuti. */
