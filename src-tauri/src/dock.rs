@@ -8,7 +8,7 @@ use windows_sys::Win32::{
     Graphics::Gdi::{GetMonitorInfoW, MonitorFromWindow, MONITORINFO, MONITOR_DEFAULTTONEAREST},
     UI::WindowsAndMessaging::{
         GetClassNameW, GetForegroundWindow, GetWindowLongW, GetWindowRect, SetWindowPos, GWL_STYLE, HWND_BOTTOM,
-        SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE, WS_CAPTION,
+        SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE, WS_CAPTION, WS_MAXIMIZE,
     },
 };
 
@@ -54,6 +54,10 @@ fn target_monitor(window: &WebviewWindow, settings: &Settings) -> Option<Monitor
 /// Vale se copre tutto il monitor, oppure se copre l'area di lavoro ed è senza barra del
 /// titolo (i giochi "in finestra senza bordi" lasciano visibile la barra delle applicazioni).
 /// Desktop e barra delle applicazioni non contano: coprono lo schermo ma sono la shell.
+/// Una finestra normale massimizzata da Windows (`WS_MAXIMIZE`) non conta mai, anche se
+/// disegna da sola la barra del titolo (VS Code, i terminali moderni, i browser Chromium…):
+/// altrimenti il deck resta bloccato dietro a tutto ogni volta che una di queste è a tutto
+/// schermo del lavoro, senza nessun gioco o video coinvolto.
 fn foreground_is_fullscreen() -> bool {
     // SAFETY: chiamate Win32 di sola lettura su strutture locali inizializzate.
     unsafe {
@@ -65,6 +69,10 @@ fn foreground_is_fullscreen() -> bool {
         let len = GetClassNameW(hwnd, class.as_mut_ptr(), class.len() as i32).max(0) as usize;
         let class = String::from_utf16_lossy(&class[..len]);
         if matches!(class.as_str(), "Progman" | "WorkerW" | "Shell_TrayWnd" | "Shell_SecondaryTrayWnd") {
+            return false;
+        }
+        let style = GetWindowLongW(hwnd, GWL_STYLE) as u32;
+        if style & WS_MAXIMIZE == WS_MAXIMIZE {
             return false;
         }
         let mut rect = std::mem::zeroed();
@@ -80,7 +88,7 @@ fn foreground_is_fullscreen() -> bool {
         let covers = |m: windows_sys::Win32::Foundation::RECT| {
             rect.left <= m.left && rect.top <= m.top && rect.right >= m.right && rect.bottom >= m.bottom
         };
-        let borderless = GetWindowLongW(hwnd, GWL_STYLE) as u32 & WS_CAPTION != WS_CAPTION;
+        let borderless = style & WS_CAPTION != WS_CAPTION;
         covers(info.rcMonitor) || (borderless && covers(info.rcWork))
     }
 }
