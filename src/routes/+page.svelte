@@ -65,8 +65,8 @@
   let leaveTimer: ReturnType<typeof setTimeout> | undefined;
   let saveTimer: ReturnType<typeof setTimeout> | undefined;
 
-  const PILL_SEG_MAX = 24;
-  const PILL_SEG_MIN = 6;
+  const PILL_SEG_MAX = 14;
+  const PILL_SEG_MIN = 7;
   const DECK_MARGIN = 80; // spazio sopra e sotto il deck, compresi i pulsanti + e ☰
 
   /** Accorcia le linguette quanto basta perché il deck stia nello schermo. */
@@ -75,7 +75,7 @@
     const fit = (winHeight - 2 * DECK_MARGIN + TAB_GAP) / notes.length - TAB_GAP;
     return Math.round(Math.min(TAB_HEIGHT, Math.max(TAB_MIN_HEIGHT, fit)));
   });
-  const pillSegHeight = $derived.by(() => {
+  const pillDotSize = $derived.by(() => {
     if (notes.length === 0) return PILL_SEG_MAX;
     const fit = (winHeight * 0.6) / notes.length - 5;
     return Math.round(Math.min(PILL_SEG_MAX, Math.max(PILL_SEG_MIN, fit)));
@@ -480,14 +480,15 @@
   class:left
   style:--tab-w="{TAB_WIDTH}px"
   style:--tab-h="{tabHeight}px"
-  style:--seg-h="{pillSegHeight}px"
+  style:--dot-size="{pillDotSize}px"
   style:--note-w="{noteW}px"
   style:--note-h="{noteH}px"
   style:--glass={glassAlpha}
   ondragover={onDragOver}
   ondrop={onDrop}
 >
-  <!-- Pillola a riposo: anche quando il ventaglio è aperto resta qui, invisibile, come maniglia di trascinamento. -->
+  <!-- Pillola a riposo: una capsula ancorata al bordo, visibile come forma anche senza hover.
+       Anche quando il ventaglio è aperto resta qui, invisibile, come maniglia di trascinamento. -->
   <!-- svelte-ignore a11y_no_static_element_interactions -->
   <div
     class="pill"
@@ -498,6 +499,7 @@
   >
     {#each notes as note (note.id)}
       <span
+        class="pill-dot"
         style:--c={vivid(note.color)}
         class:due={isOverdue(note, clock.now)}
         class:timing={note.id in timer.active}
@@ -724,18 +726,25 @@
     user-select: none;
   }
 
-  /* A riposo: sottili barre di luce sul bordo, una per nota. Resta nel DOM (solo invisibile) anche a
-     ventaglio aperto, come maniglia di trascinamento: z-index e padding la tengono sopra alle
-     linguette e le danno un'area cliccabile più larga dei soli 6px dei puntini. */
+  /* A riposo: una capsula di vetro sul bordo, con un pallino colorato per nota. La capsula stessa
+     è una forma visibile anche da ferma (non solo il colore dei pallini), così si nota più
+     facilmente sul bordo dello schermo. Resta nel DOM (solo invisibile) anche a ventaglio aperto,
+     come maniglia di trascinamento: z-index la tiene sopra alle linguette. */
   .pill {
     position: absolute;
     z-index: 1;
     right: 5px;
-    padding: 0 8px;
+    padding: 9px 7px;
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 6px;
+    gap: 7px;
+    border-radius: 999px;
+    background: rgba(20, 20, 24, 0.45);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    box-shadow:
+      0 2px 10px rgba(0, 0, 0, 0.3),
+      inset 0 1px 0 rgba(255, 255, 255, 0.12);
     transform: translateY(-50%);
     transition: opacity 0.2s;
     cursor: grab;
@@ -743,17 +752,17 @@
   .pill.hidden {
     opacity: 0;
   }
-  .pill span {
-    width: 6px;
-    height: var(--seg-h);
-    border-radius: 4px;
+  .pill-dot {
+    width: var(--dot-size);
+    height: var(--dot-size);
+    border-radius: 50%;
     background: var(--c);
     box-shadow:
       0 0 0 1px rgba(255, 255, 255, 0.35),
-      0 0 10px color-mix(in srgb, var(--c) 70%, transparent);
+      0 0 8px color-mix(in srgb, var(--c) 70%, transparent);
   }
-  /* Promemoria scaduto: la barra lampeggia di rosso. */
-  .pill span.due {
+  /* Promemoria scaduto: il pallino lampeggia di rosso. */
+  .pill-dot.due {
     animation: due-blink 1.2s ease-in-out infinite;
   }
   @keyframes due-blink {
@@ -889,7 +898,7 @@
   .stage.left .tab-timer {
     transform: scaleX(-1);
   }
-  .pill span.timing {
+  .pill-dot.timing {
     animation: timing 2.4s ease-in-out infinite;
   }
   @keyframes timing {
