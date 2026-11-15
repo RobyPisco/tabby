@@ -42,10 +42,12 @@
 
   let monitors = $state<MonitorInfo[]>([]);
   let autostart = $state(false);
+  /** Installato dal Microsoft Store: aggiornamenti e avvio con Windows li gestisce Windows. */
+  let storeBuild = $state(false);
   let version = $state("");
   let error = $state("");
   let update_ = $state<Release | null>(null);
-  let updateStatus = $state<"" | "checking" | "latest" | "failed">("");
+  let updateStatus = $state<"" | "checking" | "latest" | "failed" | "store">("");
   let dialog = $state<HTMLElement>();
   // Sincronizzazione tra PC
   let syncStatus = $state<SyncStatus>({
@@ -164,6 +166,10 @@
   async function checkUpdate() {
     updateStatus = "checking";
     try {
+      if (storeBuild || (await invoke<boolean>("is_store_build"))) {
+        updateStatus = "store";
+        return;
+      }
       update_ = await findUpdate(version || (await getVersion()));
       updateStatus = update_ ? "" : "latest";
     } catch (e) {
@@ -417,6 +423,7 @@
     invoke<boolean>("get_autostart").then((value) => (autostart = value));
     loadBackups();
     refreshSync();
+    invoke<boolean>("is_store_build").then((v) => (storeBuild = v));
     invoke<CloudFolder[]>("sync_cloud_folders").then((list) => (clouds = list));
     invoke<FolderInfo[]>("list_folders").then((list) => (folders = list));
     dialog?.focus();
@@ -471,10 +478,20 @@
 
       {#if tab === "general"}
         <div class="group">
-          <label class="row check">
-            <span>{tr("Avvia Tabby con Windows", "Start Tabby with Windows")}</span>
-            <input type="checkbox" checked={autostart} onchange={toggleAutostart} />
-          </label>
+          {#if storeBuild}
+            <div class="row">
+              <span>
+                {tr("Avvia Tabby con Windows", "Start Tabby with Windows")}
+                <small class="desc">{tr("Si accende nelle impostazioni di Windows, in App → Avvio.", "Turn it on in Windows Settings, under Apps → Startup.")}</small>
+              </span>
+              <button class="plain" onclick={() => invoke("open_startup_settings")}>{tr("Apri…", "Open…")}</button>
+            </div>
+          {:else}
+            <label class="row check">
+              <span>{tr("Avvia Tabby con Windows", "Start Tabby with Windows")}</span>
+              <input type="checkbox" checked={autostart} onchange={toggleAutostart} />
+            </label>
+          {/if}
           <label class="row">
             <span>
               {tr("Lingua", "Language")}
@@ -1051,13 +1068,17 @@
                 {tr("Controllo aggiornamenti…", "Checking for updates…")}
               {:else if updateStatus === "latest"}
                 {tr("Hai l'ultima versione.", "You have the latest version.")}
+              {:else if updateStatus === "store"}
+                {tr("Gli aggiornamenti arrivano dal Microsoft Store.", "Updates come from the Microsoft Store.")}
               {:else if updateStatus === "failed"}
                 {tr("Non riesco a controllare gli aggiornamenti.", "I can't check for updates.")}
               {:else}
                 {tr("Aggiornamenti", "Updates")}
               {/if}
             </span>
-            {#if update_}
+            {#if updateStatus === "store"}
+              <span></span>
+            {:else if update_}
               <button class="plain primary" onclick={() => update_ && openUrl(update_.url)}>{tr("Scarica", "Download")}</button>
             {:else}
               <button class="plain" disabled={updateStatus === "checking"} onclick={checkUpdate}>{tr("Controlla ora", "Check now")}</button>

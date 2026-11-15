@@ -13,6 +13,7 @@ mod pin;
 mod quiet;
 mod reminders;
 mod settings;
+mod store;
 mod sync;
 mod syncdb;
 mod timer;
@@ -216,7 +217,7 @@ fn reset_pin(app: AppHandle, db: State<Db>, state: State<SettingsState>) -> Resu
 /// recente su GitHub; al massimo una volta per versione, anche tra un riavvio e l'altro.
 #[tauri::command]
 fn notify_update_available(app: AppHandle, state: State<SettingsState>, version: String, url: String) {
-    if state.update_already_notified(&version) {
+    if store::is_packaged() || state.update_already_notified(&version) {
         return;
     }
     toast::simple(
@@ -764,6 +765,8 @@ pub fn run() {
             show_all_notes,
             open_from_search,
             sync::sync_status,
+            store::is_store_build,
+            store::open_startup_settings,
             cloud::sync_cloud_folders,
             sync::sync_choose_folder,
             sync::sync_disconnect,

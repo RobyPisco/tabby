@@ -214,6 +214,7 @@
    *  notifica di sistema (al massimo una volta per versione, vedi notify_update_available). */
   async function checkForUpdate() {
     try {
+      if (await invoke<boolean>("is_store_build")) return; // aggiorna lo Store
       const update = await findUpdate(await getVersion());
       if (update) await invoke("notify_update_available", { version: update.version, url: update.url });
     } catch (e) {

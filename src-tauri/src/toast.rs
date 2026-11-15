@@ -11,6 +11,9 @@ const ICON: &[u8] = include_bytes!("../icons/128x128@2x.png");
 /// In sviluppo l'app non è registrata in Windows, quindi si usa l'ID di PowerShell
 /// (come fa il plugin notification di Tauri); l'installer registra il nostro identificativo.
 pub fn app_id(app: &AppHandle) -> String {
+    if let Some(id) = crate::store::package_app_id() {
+        return id;
+    }
     if cfg!(debug_assertions) {
         Toast::POWERSHELL_APP_ID.to_string()
     } else {

@@ -65,7 +65,19 @@ pub fn create(app: &AppHandle) -> tauri::Result<()> {
         None::<&str>,
     )?;
     let quit = MenuItem::with_id(app, "quit", crate::i18n::tr("Esci", "Quit"), true, None::<&str>)?;
+    // Dallo Store l'avvio con Windows si accende nelle impostazioni di Windows (attività di avvio).
+    let startup_settings = MenuItem::with_id(
+        app,
+        "startup-settings",
+        crate::i18n::tr("Avvio con Windows…", "Start with Windows…"),
+        true,
+        None::<&str>,
+    )?;
     app.manage(AutostartMenuItem(autostart.clone()));
+    let separator1 = PredefinedMenuItem::separator(app)?;
+    let separator2 = PredefinedMenuItem::separator(app)?;
+    let start_item: &dyn tauri::menu::IsMenuItem<tauri::Wry> =
+        if crate::store::is_packaged() { &startup_settings } else { &autostart };
     let menu = Menu::with_items(
         app,
         &[
@@ -75,11 +87,11 @@ pub fn create(app: &AppHandle) -> tauri::Result<()> {
             &new_reminder,
             &capture_item,
             &deck,
-            &PredefinedMenuItem::separator(app)?,
+            &separator1,
             &quiet_menu,
             &settings,
-            &autostart,
-            &PredefinedMenuItem::separator(app)?,
+            start_item,
+            &separator2,
             &quit,
         ],
     )?;
@@ -112,6 +124,9 @@ pub fn create(app: &AppHandle) -> tauri::Result<()> {
                 let enable = !app.autolaunch().is_enabled().unwrap_or(false);
                 let _ = set_autostart_enabled(app, enable);
                 let _ = app.emit_to("all", "autostart-changed", ());
+            }
+            "startup-settings" => {
+                let _ = crate::store::open_startup_settings(app.clone());
             }
             "quit" => app.exit(0),
             _ => {}
