@@ -81,6 +81,7 @@
     ["Ctrl+Alt+V", "Salva gli appunti come nota"],
     ["Ctrl+Alt+H", "Mostra/nascondi il deck"],
     ["Ctrl+Alt+D", "Non disturbare per un'ora / riattiva le notifiche"],
+    ["Ctrl+Alt+F", "Cerca ovunque: trova una nota e aprila al volo"],
   ];
 
   async function update(changes: Partial<Settings>) {

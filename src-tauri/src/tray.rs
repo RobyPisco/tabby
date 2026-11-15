@@ -10,7 +10,7 @@ use crate::db::now;
 use crate::quiet::{self, QuietMenu};
 use crate::settings::SettingsState;
 use crate::{
-    capture, new_note_in_deck, set_autostart_enabled, show_settings, toggle_all_notes, toggle_deck,
+    capture, new_note_in_deck, set_autostart_enabled, show_settings, toggle_all_notes, toggle_deck, toggle_search,
     AutostartMenuItem,
 };
 
@@ -20,6 +20,7 @@ pub fn create(app: &AppHandle) -> tauri::Result<()> {
 
     // Il testo dopo il tab viene allineato a destra, come le scorciatoie nei menu di Windows.
     let all_notes = MenuItem::with_id(app, "all", "Tutte le note\tCtrl+Alt+L", true, None::<&str>)?;
+    let search = MenuItem::with_id(app, "search", "Cerca ovunque	Ctrl+Alt+F", true, None::<&str>)?;
     let new_note = MenuItem::with_id(app, "new", "Nuova nota\tCtrl+Alt+N", true, None::<&str>)?;
     let new_reminder = MenuItem::with_id(
         app,
@@ -69,6 +70,7 @@ pub fn create(app: &AppHandle) -> tauri::Result<()> {
         app,
         &[
             &all_notes,
+            &search,
             &new_note,
             &new_reminder,
             &capture_item,
@@ -88,6 +90,7 @@ pub fn create(app: &AppHandle) -> tauri::Result<()> {
         .show_menu_on_left_click(false)
         .on_menu_event(move |app, event| match event.id().as_ref() {
             "all" => toggle_all_notes(app),
+            "search" => toggle_search(app),
             "new" => new_note_in_deck(app, false),
             "new-reminder" => new_note_in_deck(app, true),
             "capture" => capture::capture_clipboard(app),

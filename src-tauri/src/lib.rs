@@ -543,13 +543,15 @@ const SHORTCUT_TOGGLE_DECK: Code = Code::KeyH; // Ctrl+Alt+H: mostra/nascondi il
 const SHORTCUT_NEW_REMINDER: Code = Code::KeyP; // Ctrl+Alt+P: nuova nota con promemoria
 const SHORTCUT_CAPTURE: Code = Code::KeyV; // Ctrl+Alt+V: salva gli appunti come nota
 const SHORTCUT_QUIET: Code = Code::KeyD; // Ctrl+Alt+D: non disturbare per un'ora / riattiva
-const SHORTCUTS: [Code; 6] = [
+const SHORTCUT_SEARCH: Code = Code::KeyF; // Ctrl+Alt+F: cerca ovunque
+const SHORTCUTS: [Code; 7] = [
     SHORTCUT_ALL_NOTES,
     SHORTCUT_NEW_NOTE,
     SHORTCUT_TOGGLE_DECK,
     SHORTCUT_NEW_REMINDER,
     SHORTCUT_CAPTURE,
     SHORTCUT_QUIET,
+    SHORTCUT_SEARCH,
 ];
 
 fn ctrl_alt(code: Code) -> Shortcut {
@@ -603,6 +605,35 @@ pub(crate) fn new_note_in_deck(app: &AppHandle, with_reminder: bool) {
     let _ = window.emit_to("main", "new-note", with_reminder);
 }
 
+/// Barra "Cerca ovunque" al centro dello schermo; se è già aperta, la chiude.
+pub(crate) fn toggle_search(app: &AppHandle) {
+    let Some(window) = app.get_webview_window("search") else {
+        return;
+    };
+    if window.is_visible().unwrap_or(false) {
+        let _ = window.hide();
+        return;
+    }
+    let _ = window.center();
+    let _ = window.show();
+    let _ = window.set_focus();
+    let _ = window.emit_to("search", "search-shown", ());
+}
+
+/// Apre la nota scelta nella ricerca: nel deck se è attiva, altrimenti in "Tutte le note".
+#[tauri::command]
+fn open_from_search(app: AppHandle, id: i64, in_deck: bool) {
+    if let Some(window) = app.get_webview_window("search") {
+        let _ = window.hide();
+    }
+    if in_deck {
+        reminders::open_note_in_deck(&app, id);
+    } else {
+        show_all_notes_window(&app);
+        let _ = app.emit_to("all", "select-note", id);
+    }
+}
+
 #[tauri::command]
 fn show_all_notes(app: AppHandle) {
     toggle_all_notes(&app);
@@ -645,6 +676,7 @@ pub fn run() {
                         SHORTCUT_TOGGLE_DECK => toggle_deck(app),
                         SHORTCUT_CAPTURE => capture::capture_clipboard(app),
                         SHORTCUT_QUIET => quiet::toggle(app),
+                        SHORTCUT_SEARCH => toggle_search(app),
                         _ => {}
                     }
                 })
@@ -714,6 +746,7 @@ pub fn run() {
             open_data_folder,
             delete_notes,
             show_all_notes,
+            open_from_search,
             sync::sync_status,
             sync::sync_choose_folder,
             sync::sync_disconnect,
@@ -722,7 +755,7 @@ pub fn run() {
         .on_window_event(|window, event| {
             // Chiudere "Tutte le note" la nasconde soltanto: riaprirla è istantaneo.
             if let WindowEvent::CloseRequested { api, .. } = event {
-                if window.label() == "all" {
+                if window.label() == "all" || window.label() == "search" {
                     api.prevent_close();
                     let _ = window.hide();
                 }

@@ -36,6 +36,22 @@
         "center": true,
         "visible": false,
         "dragDropEnabled": false
+      },
+      {
+        "label": "search",
+        "title": "Cerca",
+        "url": "/search",
+        "width": 640,
+        "height": 430,
+        "center": true,
+        "visible": false,
+        "decorations": false,
+        "transparent": true,
+        "alwaysOnTop": true,
+        "skipTaskbar": true,
+        "resizable": false,
+        "shadow": true,
+        "dragDropEnabled": false
       }
     ],
     "security": {

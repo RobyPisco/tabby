@@ -44,6 +44,7 @@ L'installer non è ancora firmato: se Windows mostra "App non riconosciuta", sce
 | `Ctrl+Alt+V` | Salva gli appunti come nota |
 | `Ctrl+Alt+H` | Mostra/nascondi il deck |
 | `Ctrl+Alt+D` | Non disturbare per un'ora / riattiva le notifiche |
+| `Ctrl+Alt+F` | Cerca ovunque: barra di ricerca al centro dello schermo, Invio apre la nota |
 | `Ctrl+L` / `Ctrl+Invio` | Casella da spuntare / spunta la riga |
 | `Ctrl+B` / `Ctrl+I` / `Ctrl+Shift+X` | Grassetto / corsivo / barrato |
 | `Ctrl+F`, `Ctrl+N`, `Esc` | Ricerca, nuova nota, chiudi (in "Tutte le note") |

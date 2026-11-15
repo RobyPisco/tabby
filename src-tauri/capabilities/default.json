@@ -4,7 +4,8 @@
   "description": "Capability for the dock and the \"Tutte le note\" window",
   "windows": [
     "main",
-    "all"
+    "all",
+    "search"
   ],
   "permissions": [
     "core:default",
