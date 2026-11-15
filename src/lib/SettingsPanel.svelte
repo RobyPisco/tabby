@@ -34,8 +34,10 @@
     encrypted: boolean;
     needs_passphrase: boolean;
     phone_copy: boolean;
+    service: string | null;
     shares: ShareStatus[];
   };
+  type CloudFolder = { service: string; path: string };
   type FolderInfo = { id: number; name: string; count: number };
 
   let monitors = $state<MonitorInfo[]>([]);
@@ -54,8 +56,10 @@
     encrypted: false,
     needs_passphrase: false,
     phone_copy: true,
+    service: null,
     shares: [],
   });
+  let clouds = $state<CloudFolder[]>([]);
   let syncConfirmOff = $state(false);
   let passphrase = $state("");
   let passphraseOpen = $state(false);
@@ -248,6 +252,22 @@
     }
   }
 
+  /** Usa la cartella di un servizio cloud trovato sul PC (Tabby ci crea "Tabby Sync"). */
+  async function useCloud(path: string) {
+    error = "";
+    try {
+      await invoke<string>("sync_choose_folder", { path });
+      setTimeout(refreshSync, 1500);
+    } catch (e) {
+      error = `${tr("Sincronizzazione", "Sync")}: ${e}`;
+    }
+  }
+
+  const DOWNLOADS: [string, string][] = [
+    ["Google Drive", "https://www.google.com/drive/download/"],
+    ["Dropbox", "https://www.dropbox.com/install"],
+  ];
+
   async function syncDisconnect() {
     if (!syncConfirmOff) {
       syncConfirmOff = true;
@@ -397,6 +417,7 @@
     invoke<boolean>("get_autostart").then((value) => (autostart = value));
     loadBackups();
     refreshSync();
+    invoke<CloudFolder[]>("sync_cloud_folders").then((list) => (clouds = list));
     invoke<FolderInfo[]>("list_folders").then((list) => (folders = list));
     dialog?.focus();
     // Cambiato dal menu della tray mentre il pannello è aperto.
@@ -749,13 +770,40 @@
         {#if !settings.sync_dir}
           <div class="group">
             <p class="desc pad">
-              {tr("Scegli una cartella che il tuo servizio cloud tiene già sincronizzata, per esempio «Il mio Drive» di Google Drive per desktop, OneDrive o Dropbox. Fai la stessa scelta sugli altri PC: Tabby crea lì dentro la cartella «Tabby Sync» e unisce le note di tutti, senza perderne nessuna.", "Choose a folder that your cloud service already keeps in sync, for example “My Drive” of Google Drive for desktop, OneDrive or Dropbox. Make the same choice on your other PCs: Tabby creates a “Tabby Sync” folder in it and merges everyone's notes, without losing any.")}
+              {tr("Tabby non ha un server: per avere le stesse note su più PC usa un servizio cloud che hai già, come Google Drive, OneDrive o Dropbox. Serve la sua app installata e collegata al tuo account su ogni PC: Tabby scrive le note nella sua cartella e l'app le porta sugli altri PC.", "Tabby has no server: to have the same notes on several PCs it uses a cloud service you already have, such as Google Drive, OneDrive or Dropbox. Its app must be installed and signed in on every PC: Tabby writes the notes in its folder and the app carries them to the other PCs.")}
             </p>
+            {#if clouds.length > 0}
+              {#each clouds as c (c.path)}
+                <div class="row">
+                  <span class="path">
+                    <strong>{c.service}</strong>
+                    <small class="desc" title={c.path}>{c.path}</small>
+                  </span>
+                  <button class="plain primary" onclick={() => useCloud(c.path)}>{tr("Usa questa", "Use this")}</button>
+                </div>
+              {/each}
+            {:else}
+              <p class="desc pad warn">{tr("Su questo PC non ho trovato Google Drive, OneDrive o Dropbox.", "I didn't find Google Drive, OneDrive or Dropbox on this PC.")}</p>
+            {/if}
             <div class="row">
-              <span>{tr("Non sincronizzato", "Not synced")}</span>
-              <button class="plain primary" onclick={chooseSyncFolder}>{tr("Scegli cartella…", "Choose folder…")}</button>
+              <span>{tr("Un'altra cartella (anche di rete)", "Another folder (network ones too)")}</span>
+              <button class="plain" onclick={chooseSyncFolder}>{tr("Scegli cartella…", "Choose folder…")}</button>
             </div>
           </div>
+          <details class="howto">
+            <summary>{tr("Come si fa, passo per passo", "How to do it, step by step")}</summary>
+            <ol>
+              <li>
+                {tr("Installa l'app del servizio che usi e accedi con il tuo account:", "Install the app of the service you use and sign in with your account:")}
+                {#each DOWNLOADS as [name, url] (name)}
+                  <button class="link" onclick={() => openUrl(url)}>{name}</button>
+                {/each}
+                {tr("(OneDrive è già in Windows).", "(OneDrive is already in Windows).")}
+              </li>
+              <li>{tr("Torna qui: la cartella compare nell'elenco sopra. Premi «Usa questa».", "Come back here: the folder appears in the list above. Press “Use this”.")}</li>
+              <li>{tr("Sugli altri PC: stessa app, stesso account, e qui la stessa scelta. Le note si uniscono da sole, senza perderne nessuna.", "On your other PCs: same app, same account, and the same choice here. The notes merge by themselves, without losing any.")}</li>
+            </ol>
+          </details>
           <p class="tip">
             {tr("💡 Viaggiano note, cartelle, promemoria, colori, note fissate, cestino e PIN. Restano di ogni PC: posizione del deck, suoni, scorciatoie, Non disturbare e backup.", "💡 Notes, folders, reminders, colours, pinned notes, trash and PIN travel. Each PC keeps its own deck position, sounds, shortcuts, Do not disturb and backups.")}
           </p>
@@ -766,7 +814,12 @@
                 <strong>
                   {syncStatus.needs_passphrase ? tr("🔑 Serve la frase segreta", "🔑 Passphrase needed") : syncStatus.last_error ? tr("⚠ Sincronizzazione ferma", "⚠ Sync stopped") : tr("✓ Sincronizzato", "✓ Synced")}
                 </strong>
-                <small class="desc" title={settings.sync_dir}>{settings.sync_dir}</small>
+                <small class="desc" title={settings.sync_dir}>
+                  {syncStatus.service ? `${syncStatus.service} · ` : ""}{settings.sync_dir}
+                </small>
+                {#if !syncStatus.service && !syncStatus.last_error}
+                  <small class="desc warn">{tr("Questa cartella non sembra di Google Drive, OneDrive o Dropbox: se non è una cartella di rete, le note restano solo su questo PC.", "This folder doesn't look like Google Drive, OneDrive or Dropbox: unless it is a network folder, the notes stay on this PC only.")}</small>
+                {/if}
                 {#if syncStatus.last_error && !syncStatus.needs_passphrase}
                   <small class="desc warn">{syncStatus.last_error}</small>
                 {:else if syncStatus.last_sync && !syncStatus.needs_passphrase}
@@ -1208,6 +1261,28 @@
     background: transparent;
     color: inherit;
     font: inherit;
+  }
+  .howto {
+    margin: 4px 2px 14px;
+    font-size: 13px;
+  }
+  .howto summary {
+    cursor: pointer;
+    font-weight: 600;
+  }
+  .howto ol {
+    margin: 8px 0 0;
+    padding-left: 20px;
+    line-height: 1.6;
+  }
+  .link {
+    border: 0;
+    padding: 0 2px;
+    background: transparent;
+    color: var(--focus, #2563eb);
+    font: inherit;
+    text-decoration: underline;
+    cursor: pointer;
   }
   .desc.warn {
     color: var(--danger, #e55);

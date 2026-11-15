@@ -1,5 +1,6 @@
 mod backup;
 mod capture;
+mod cloud;
 mod crypto;
 mod db;
 mod dock;
@@ -763,6 +764,7 @@ pub fn run() {
             show_all_notes,
             open_from_search,
             sync::sync_status,
+            cloud::sync_cloud_folders,
             sync::sync_choose_folder,
             sync::sync_disconnect,
             sync::sync_now,

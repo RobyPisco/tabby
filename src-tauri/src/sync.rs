@@ -185,6 +185,8 @@ pub struct SyncStatus {
     pub needs_passphrase: bool,
     /// Copie per il telefono attive (opzione della cartella).
     pub phone_copy: bool,
+    /// Servizio cloud che sincronizza la cartella ("Google Drive"…); `None` se non è riconosciuto.
+    pub service: Option<String>,
     pub shares: Vec<ShareStatus>,
 }
 
@@ -519,6 +521,8 @@ pub fn start(app: &AppHandle) -> SyncState {
         let mut personal = Engine::default();
         let mut shares: HashMap<String, Engine> = HashMap::new();
         let mut errors: HashMap<String, Option<String>> = HashMap::new();
+        // Cartelle dei servizi cloud del PC: cercate una volta (e di nuovo se cambia la cartella).
+        let mut clouds: Option<Vec<crate::cloud::CloudFolder>> = None;
         let mut tick: u32 = 0;
         loop {
             let forced = rx.recv_timeout(TICK).is_ok();
@@ -527,6 +531,7 @@ pub fn start(app: &AppHandle) -> SyncState {
             if state.reset.swap(false, Ordering::SeqCst) {
                 personal = Engine::default();
                 shares.clear();
+                clouds = None;
             }
             let read = forced || tick % READ_EVERY == 0;
             let settings = app.state::<SettingsState>().get();
@@ -542,6 +547,10 @@ pub fn start(app: &AppHandle) -> SyncState {
                 status.devices = personal.device_list();
                 status.encrypted = personal.encrypted;
                 status.phone_copy = personal.phone_copy && !personal.encrypted;
+                if clouds.is_none() {
+                    clouds = Some(crate::cloud::find());
+                }
+                status.service = crate::cloud::service_of(&dir, clouds.as_deref().unwrap_or_default());
             } else {
                 personal = Engine::default();
             }
@@ -579,6 +588,7 @@ pub fn start(app: &AppHandle) -> SyncState {
                 || current.devices != status.devices
                 || current.encrypted != status.encrypted
                 || current.phone_copy != status.phone_copy
+                || current.service != status.service
                 || current.shares.len() != status.shares.len()
                 || current.shares.iter().zip(&status.shares).any(|(a, b)| a.devices != b.devices || a.name != b.name)
                 || status.last_sync.unwrap_or(0) - current.last_sync.unwrap_or(0) >= 60;
