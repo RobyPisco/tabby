@@ -1,0 +1,6 @@
+{
+  "IdentityName": "<Package/Identity/Name, es. 12345PiscoFactory.Tabby>",
+  "Publisher": "<Package/Identity/Publisher, es. CN=1A2B3C4D-...>",
+  "PublisherDisplayName": "<Package/Properties/PublisherDisplayName, es. Pisco Factory>",
+  "DisplayName": "Tabby"
+}
