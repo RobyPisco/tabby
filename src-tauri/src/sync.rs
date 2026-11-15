@@ -45,7 +45,9 @@ const TICK: Duration = Duration::from_secs(3);
 /// Ogni quanti giri leggere i file degli altri PC (5 × 3 s = 15 s).
 const READ_EVERY: u32 = 5;
 /// Errore mostrato quando la cartella è cifrata e su questo PC manca la frase segreta.
-pub const NEED_PASSPHRASE: &str = "La cartella condivisa è cifrata: inserisci la frase segreta scelta sull'altro PC.";
+pub fn need_passphrase() -> &'static str {
+    crate::i18n::tr("La cartella condivisa è cifrata: inserisci la frase segreta scelta sull'altro PC.", "The shared folder is encrypted: enter the passphrase chosen on the other PC.")
+}
 
 const KIND_PERSONAL: &str = "personal";
 const KIND_SHARE: &str = "share";
@@ -73,6 +75,9 @@ struct Marker {
     /// Copie `.md` leggibili dal telefono (solo cartella personale non cifrata).
     #[serde(default = "yes")]
     phone_copy: bool,
+    /// Nome della cartella delle copie, nella lingua del PC che ha creato la cartella condivisa.
+    #[serde(default)]
+    phone_dir: Option<String>,
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
@@ -91,7 +96,12 @@ impl Marker {
             share_name: None,
             crypto: None,
             phone_copy: true,
+            phone_dir: Some(crate::i18n::tr(phone::DIR_NAME, phone::DIR_NAME_EN).into()),
         }
+    }
+
+    fn phone_dir(&self) -> &str {
+        self.phone_dir.as_deref().filter(|d| phone::is_valid_dir_name(d)).unwrap_or(phone::DIR_NAME)
     }
 
     fn share(folder_uid: &str, name: &str) -> Self {
@@ -115,7 +125,7 @@ fn read_marker(dir: &Path) -> Result<Option<Marker>, String> {
         return Ok(None);
     }
     let text = fs::read_to_string(&path).map_err(|e| e.to_string())?;
-    serde_json::from_str(&text).map(Some).map_err(|_| "il file tabby-sync.json è rovinato".to_string())
+    serde_json::from_str(&text).map(Some).map_err(|_| crate::i18n::tr("il file tabby-sync.json è rovinato", "the tabby-sync.json file is damaged").to_string())
 }
 
 fn write_marker(dir: &Path, marker: &Marker) -> Result<(), String> {
@@ -203,8 +213,9 @@ pub fn resolve_dir(chosen: &Path) -> PathBuf {
 }
 
 fn prepare_dirs(dir: &Path) -> Result<(), String> {
-    fs::create_dir_all(dir.join("devices")).map_err(|e| format!("cartella non creata: {e}"))?;
-    fs::create_dir_all(dir.join("media")).map_err(|e| format!("cartella non creata: {e}"))
+    let failed = |e: std::io::Error| format!("{}: {e}", crate::i18n::tr("cartella non creata", "folder not created"));
+    fs::create_dir_all(dir.join("devices")).map_err(failed)?;
+    fs::create_dir_all(dir.join("media")).map_err(failed)
 }
 
 /// Scrive prima un file temporaneo e poi lo rinomina: chi legge non trova mai un file a metà.
@@ -231,7 +242,7 @@ fn folder_key(marker: &Marker, settings: &Settings) -> Result<Option<Key>, Strin
     let key = settings.sync_key.as_deref().and_then(crypto::decode_key);
     match key {
         Some(key) if crypto::key_matches(&key, &info.check) => Ok(Some(key)),
-        _ => Err(NEED_PASSPHRASE.into()),
+        _ => Err(need_passphrase().into()),
     }
 }
 
@@ -269,10 +280,11 @@ impl Engine {
             *self = Engine { dir: Some(dir.to_path_buf()), shared_until: now_ms(), ..Engine::default() };
         }
         if !dir.is_dir() {
-            return Err(format!(
-                "Cartella non raggiungibile: {}. Google Drive (o il servizio che usi) è avviato?",
-                dir.display()
-            ));
+            return Err(if crate::i18n::is_english() {
+                format!("Folder not reachable: {}. Is Google Drive (or the service you use) running?", dir.display())
+            } else {
+                format!("Cartella non raggiungibile: {}. Google Drive (o il servizio che usi) è avviato?", dir.display())
+            });
         }
         let marker = match (read_marker(dir)?, scope) {
             (Some(m), _) => m,
@@ -282,14 +294,14 @@ impl Engine {
                 write_marker(dir, &m)?;
                 m
             }
-            (None, Scope::Share { .. }) => return Err("la cartella non contiene più la lista condivisa".into()),
+            (None, Scope::Share { .. }) => return Err(crate::i18n::tr("la cartella non contiene più la lista condivisa", "the folder no longer contains the shared list").into()),
         };
         match scope {
             Scope::Personal if marker.is_share() => {
-                return Err("questa cartella è di una lista condivisa, non della sincronizzazione dei tuoi PC".into())
+                return Err(crate::i18n::tr("questa cartella è di una lista condivisa, non della sincronizzazione dei tuoi PC", "this folder belongs to a shared list, not to the sync of your PCs").into())
             }
             Scope::Share { folder_uid } if marker.share_folder.as_deref() != Some(folder_uid) => {
-                return Err("la cartella contiene un'altra lista condivisa".into())
+                return Err(crate::i18n::tr("la cartella contiene un'altra lista condivisa", "the folder contains another shared list").into())
             }
             _ => {}
         }
@@ -340,7 +352,7 @@ impl Engine {
                 Some(key) => crypto::encrypt(key, &json),
                 None => json,
             };
-            write_atomic(&own, &bytes).map_err(|e| format!("scrittura nella cartella condivisa non riuscita: {e}"))?;
+            write_atomic(&own, &bytes).map_err(|e| format!("{}: {e}", crate::i18n::tr("scrittura nella cartella condivisa non riuscita", "could not write to the shared folder")))?;
             self.written = Some(signature);
             self.shared_until = taken_at;
             self.devices.insert(
@@ -352,10 +364,10 @@ impl Engine {
             if *scope == Scope::Personal {
                 if key.is_none() && marker.phone_copy {
                     if self.others_written.values().all(|&t| t <= taken_at) {
-                        phone::write(dir, &file.snapshot).map_err(|e| format!("copie per il telefono non scritte: {e}"))?;
+                        phone::write(dir, marker.phone_dir(), &file.snapshot).map_err(|e| format!("{}: {e}", crate::i18n::tr("copie per il telefono non scritte", "phone copies not written")))?;
                     }
                 } else {
-                    phone::remove(dir);
+                    phone::remove(dir, marker.phone_dir());
                 }
             }
         }
@@ -398,7 +410,7 @@ impl Engine {
             // Un file ancora in arrivo (scaricato a metà) non si legge: si riprova al giro dopo.
             let Ok(file) = serde_json::from_slice::<DeviceFile>(&json) else { continue };
             if file.format > FORMAT {
-                return Err("un altro PC usa una versione più nuova di Tabby: aggiorna anche questo".into());
+                return Err(crate::i18n::tr("un altro PC usa una versione più nuova di Tabby: aggiorna anche questo", "another PC uses a newer version of Tabby: update this one too").into());
             }
             let snapshot = match scope {
                 Scope::Personal => file.snapshot,
@@ -524,7 +536,7 @@ pub fn start(app: &AppHandle) -> SyncState {
                 let dir = PathBuf::from(dir);
                 let result = personal.round(&app, &dir, &Scope::Personal, read);
                 status.dir = Some(dir.to_string_lossy().into_owned());
-                status.needs_passphrase = result.as_ref().err().is_some_and(|e| e == NEED_PASSPHRASE);
+                status.needs_passphrase = result.as_ref().err().is_some_and(|e| e == need_passphrase());
                 status.last_error = result.err();
                 status.last_sync = personal.last_sync;
                 status.devices = personal.device_list();
@@ -544,7 +556,7 @@ pub fn start(app: &AppHandle) -> SyncState {
                     .folder_name_by_uid(&share.folder_uid)
                     .ok()
                     .flatten()
-                    .unwrap_or_else(|| "(cartella eliminata)".into());
+                    .unwrap_or_else(|| crate::i18n::tr("(cartella eliminata)", "(deleted folder)").into());
                 status.shares.push(ShareStatus {
                     folder_uid: share.folder_uid.clone(),
                     name,
@@ -586,7 +598,7 @@ fn current_dir(app: &AppHandle) -> Result<PathBuf, String> {
         .get()
         .sync_dir
         .map(PathBuf::from)
-        .ok_or_else(|| "la sincronizzazione non è attiva".to_string())
+        .ok_or_else(|| crate::i18n::tr("la sincronizzazione non è attiva", "sync is not turned on").to_string())
 }
 
 fn saved(app: &AppHandle, settings: Settings) {
@@ -604,13 +616,13 @@ pub fn sync_status(state: State<SyncState>) -> SyncStatus {
 pub fn sync_choose_folder(app: AppHandle, path: String) -> Result<String, String> {
     let chosen = PathBuf::from(path.trim());
     if !chosen.is_dir() {
-        return Err("la cartella scelta non esiste".into());
+        return Err(crate::i18n::tr("la cartella scelta non esiste", "the chosen folder does not exist").into());
     }
     let dir = resolve_dir(&chosen);
     prepare_dirs(&dir)?;
     match read_marker(&dir)? {
         Some(m) if m.is_share() => {
-            return Err("questa cartella è di una lista condivisa: scegline un'altra".into());
+            return Err(crate::i18n::tr("questa cartella è di una lista condivisa: scegline un'altra", "this folder belongs to a shared list: choose another one").into());
         }
         Some(_) => {}
         None => write_marker(&dir, &Marker::personal())?,
@@ -638,16 +650,20 @@ pub fn sync_now(state: State<SyncState>) {
 #[tauri::command]
 pub fn sync_set_passphrase(app: AppHandle, passphrase: String) -> Result<(), String> {
     if passphrase.trim().chars().count() < crypto::MIN_PASSPHRASE {
-        return Err(format!("la frase segreta deve avere almeno {} caratteri", crypto::MIN_PASSPHRASE));
+        return Err(if crate::i18n::is_english() {
+            format!("the passphrase must have at least {} characters", crypto::MIN_PASSPHRASE)
+        } else {
+            format!("la frase segreta deve avere almeno {} caratteri", crypto::MIN_PASSPHRASE)
+        });
     }
     let dir = current_dir(&app)?;
     let mut marker = read_marker(&dir)?.unwrap_or_else(Marker::personal);
     let key = match &marker.crypto {
         Some(info) => {
-            let salt = crypto::decode(&info.salt).ok_or("il file tabby-sync.json è rovinato")?;
+            let salt = crypto::decode(&info.salt).ok_or(crate::i18n::tr("il file tabby-sync.json è rovinato", "the tabby-sync.json file is damaged"))?;
             let key = crypto::derive_key(&passphrase, &salt);
             if !crypto::key_matches(&key, &info.check) {
-                return Err("frase segreta sbagliata: deve essere la stessa scelta sull'altro PC".into());
+                return Err(crate::i18n::tr("frase segreta sbagliata: deve essere la stessa scelta sull'altro PC", "wrong passphrase: it must be the same one chosen on the other PC").into());
             }
             key
         }
@@ -656,7 +672,7 @@ pub fn sync_set_passphrase(app: AppHandle, passphrase: String) -> Result<(), Str
             let key = crypto::derive_key(&passphrase, &salt);
             marker.crypto = Some(CryptoInfo { salt: crypto::encode(&salt), check: crypto::make_check(&key) });
             write_marker(&dir, &marker)?;
-            phone::remove(&dir);
+            phone::remove(&dir, marker.phone_dir());
             key
         }
     };
@@ -669,7 +685,7 @@ pub fn sync_set_passphrase(app: AppHandle, passphrase: String) -> Result<(), Str
 #[tauri::command]
 pub fn sync_remove_encryption(app: AppHandle) -> Result<(), String> {
     let dir = current_dir(&app)?;
-    let mut marker = read_marker(&dir)?.ok_or("cartella di sincronizzazione non trovata")?;
+    let mut marker = read_marker(&dir)?.ok_or(crate::i18n::tr("cartella di sincronizzazione non trovata", "sync folder not found"))?;
     folder_key(&marker, &app.state::<SettingsState>().get())?;
     marker.crypto = None;
     write_marker(&dir, &marker)?;
@@ -682,11 +698,11 @@ pub fn sync_remove_encryption(app: AppHandle) -> Result<(), String> {
 #[tauri::command]
 pub fn sync_set_phone_copy(app: AppHandle, enabled: bool) -> Result<(), String> {
     let dir = current_dir(&app)?;
-    let mut marker = read_marker(&dir)?.ok_or("cartella di sincronizzazione non trovata")?;
+    let mut marker = read_marker(&dir)?.ok_or(crate::i18n::tr("cartella di sincronizzazione non trovata", "sync folder not found"))?;
     marker.phone_copy = enabled;
     write_marker(&dir, &marker)?;
     if !enabled {
-        phone::remove(&dir);
+        phone::remove(&dir, marker.phone_dir());
     }
     app.state::<SyncState>().restart();
     Ok(())
@@ -698,21 +714,21 @@ pub fn sync_set_phone_copy(app: AppHandle, enabled: bool) -> Result<(), String> 
 pub fn share_folder(app: AppHandle, folder_id: i64, path: String) -> Result<String, String> {
     let dir = PathBuf::from(path.trim());
     if !dir.is_dir() {
-        return Err("la cartella scelta non esiste".into());
+        return Err(crate::i18n::tr("la cartella scelta non esiste", "the chosen folder does not exist").into());
     }
     let (uid, name) = app
         .state::<Db>()
         .folder_uid(folder_id)
         .map_err(|e| e.to_string())?
-        .ok_or("cartella di note non trovata")?;
+        .ok_or(crate::i18n::tr("cartella di note non trovata", "note folder not found"))?;
     if let Some(personal) = app.state::<SettingsState>().get().sync_dir {
         if dir.starts_with(&personal) || Path::new(&personal).starts_with(&dir) {
-            return Err("usa una cartella diversa da quella della sincronizzazione dei tuoi PC".into());
+            return Err(crate::i18n::tr("usa una cartella diversa da quella della sincronizzazione dei tuoi PC", "use a folder other than the one used to sync your PCs").into());
         }
     }
     match read_marker(&dir)? {
         Some(m) if m.share_folder.as_deref() == Some(uid.as_str()) => {}
-        Some(_) => return Err("questa cartella è già usata da Tabby per altro: scegline una vuota".into()),
+        Some(_) => return Err(crate::i18n::tr("questa cartella è già usata da Tabby per altro: scegline una vuota", "Tabby already uses this folder for something else: choose an empty one").into()),
         None => {
             prepare_dirs(&dir)?;
             write_marker(&dir, &Marker::share(&uid, &name))?;
@@ -731,11 +747,11 @@ pub fn share_join(app: AppHandle, path: String) -> Result<String, String> {
     let dir = PathBuf::from(path.trim());
     let marker = read_marker(&dir)?
         .filter(Marker::is_share)
-        .ok_or("in questa cartella non c'è una lista condivisa di Tabby: scegli la cartella che ti hanno condiviso")?;
-    let uid = marker.share_folder.clone().ok_or("il file tabby-sync.json è rovinato")?;
-    let name = marker.share_name.clone().unwrap_or_else(|| "Lista condivisa".into());
+        .ok_or(crate::i18n::tr("in questa cartella non c'è una lista condivisa di Tabby: scegli la cartella che ti hanno condiviso", "there is no Tabby shared list in this folder: choose the folder that was shared with you"))?;
+    let uid = marker.share_folder.clone().ok_or(crate::i18n::tr("il file tabby-sync.json è rovinato", "the tabby-sync.json file is damaged"))?;
+    let name = marker.share_name.clone().unwrap_or_else(|| crate::i18n::tr("Lista condivisa", "Shared list").into());
     if marker.crypto.is_some() {
-        return Err("le liste condivise cifrate non sono ancora supportate".into());
+        return Err(crate::i18n::tr("le liste condivise cifrate non sono ancora supportate", "encrypted shared lists are not supported yet").into());
     }
     app.state::<Db>().ensure_folder(&uid, &name).map_err(|e| e.to_string())?;
     crate::notify_changed_from(&app, "sync");
@@ -796,7 +812,7 @@ mod tests {
             ..Marker::personal()
         };
         let mut settings = Settings::default();
-        assert_eq!(folder_key(&marker, &settings), Err(NEED_PASSPHRASE.to_string()));
+        assert_eq!(folder_key(&marker, &settings), Err(need_passphrase().to_string()));
         settings.sync_key = Some(crypto::encode(&crypto::derive_key("frase sbagliata!", &salt)));
         assert!(folder_key(&marker, &settings).is_err());
         settings.sync_key = Some(crypto::encode(&key));

@@ -99,7 +99,7 @@ fn link_or_copy(src: &Path, previous: Option<&Path>, dest: &Path) -> std::io::Re
 fn run_protecting(app: &AppHandle, protect: Option<&str>) -> Result<BackupInfo, String> {
     let dir = backup_dir(app)?;
     let data = crate::data_dir(app).map_err(|e| e.to_string())?;
-    fs::create_dir_all(&dir).map_err(|e| format!("cartella dei backup non disponibile: {e}"))?;
+    fs::create_dir_all(&dir).map_err(|e| format!("{}: {e}", crate::i18n::tr("cartella dei backup non disponibile", "backup folder not available")))?;
     let previous = names(&dir).into_iter().next().map(|n| dir.join(n));
 
     let mut name = format!("{PREFIX}{}", Local::now().format(NAME_FORMAT));
@@ -115,7 +115,7 @@ fn run_protecting(app: &AppHandle, protect: Option<&str>) -> Result<BackupInfo, 
     let result = (|| -> Result<(), String> {
         app.state::<Db>()
             .copy_to(&tmp.join("notes.db"))
-            .map_err(|e| format!("copia del database non riuscita: {e}"))?;
+            .map_err(|e| format!("{}: {e}", crate::i18n::tr("copia del database non riuscita", "database copy failed")))?;
         let settings = data.join("settings.json");
         if settings.is_file() {
             fs::copy(&settings, tmp.join("settings.json")).map_err(|e| e.to_string())?;
@@ -153,14 +153,14 @@ pub fn run(app: &AppHandle) -> Result<BackupInfo, String> {
 /// così anche il ripristino si può annullare.
 pub fn restore(app: &AppHandle, name: &str) -> Result<(), String> {
     if created_at(name).is_none() || name.contains(['/', '\\']) {
-        return Err("backup non valido".into());
+        return Err(crate::i18n::tr("backup non valido", "invalid backup").into());
     }
     let dir = backup_dir(app)?;
     let source = dir.join(name);
     if !source.join("notes.db").is_file() {
-        return Err("backup non trovato".into());
+        return Err(crate::i18n::tr("backup non trovato", "backup not found").into());
     }
-    run_protecting(app, Some(name)).map_err(|e| format!("backup di sicurezza non riuscito: {e}"))?;
+    run_protecting(app, Some(name)).map_err(|e| format!("{}: {e}", crate::i18n::tr("backup di sicurezza non riuscito", "safety backup failed")))?;
 
     // Le immagini non vengono mai sovrascritte: il nome è il contenuto, basta aggiungere quelle mancanti.
     let media = crate::media::media_dir(app)?;
@@ -172,7 +172,7 @@ pub fn restore(app: &AppHandle, name: &str) -> Result<(), String> {
     }
     app.state::<Db>()
         .restore_from(&source.join("notes.db"))
-        .map_err(|e| format!("ripristino del database non riuscito: {e}"))?;
+        .map_err(|e| format!("{}: {e}", crate::i18n::tr("ripristino del database non riuscito", "database restore failed")))?;
     // Con la sincronizzazione attiva le note ripristinate devono vincere su quelle degli altri PC.
     app.state::<Db>().sync_touch_all().map_err(|e| e.to_string())?;
     app.state::<Scheduler>().wake();

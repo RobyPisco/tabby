@@ -192,6 +192,12 @@ pub(crate) const SEED: [(&str, &str, &str, &str); 2] = [
     ("seed-spesa", "Spesa", "- mele\n- banane\n- caffè", "#b3e5cf"),
 ];
 
+/// Le stesse note di benvenuto in inglese (stesso `uid`).
+const SEED_EN: [(&str, &str); 2] = [
+    ("Welcome", "- move the mouse to the right edge\n- click a tab to open it\n- type: it saves by itself"),
+    ("Shopping", "- apples\n- bananas\n- coffee"),
+];
+
 /// Google Calendar non c'è più: le note importate dal calendario erano solo copie degli
 /// eventi, quindi si eliminano, insieme alla cartella "Calendario Google" se resta vuota.
 /// Le colonne `gcal_event_id`/`gcal_stale` restano nei database vecchi ma non si usano più.
@@ -310,7 +316,8 @@ impl Db {
             return Ok(());
         }
         let t = now();
-        for (uid, title, body, color) in SEED {
+        for (i, (uid, title, body, color)) in SEED.into_iter().enumerate() {
+            let (title, body) = if crate::i18n::is_english() { SEED_EN[i] } else { (title, body) };
             // changed_at = 1: qualsiasi modifica vera, su qualsiasi PC, vince sulla nota di benvenuto.
             conn.execute(
                 "INSERT INTO notes (uid, title, body, color, created_at, updated_at, changed_at)

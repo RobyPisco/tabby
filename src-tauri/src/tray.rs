@@ -19,34 +19,34 @@ pub fn create(app: &AppHandle) -> tauri::Result<()> {
     let autostart_enabled = app.autolaunch().is_enabled().unwrap_or(false);
 
     // Il testo dopo il tab viene allineato a destra, come le scorciatoie nei menu di Windows.
-    let all_notes = MenuItem::with_id(app, "all", "Tutte le note\tCtrl+Alt+L", true, None::<&str>)?;
-    let search = MenuItem::with_id(app, "search", "Cerca ovunque	Ctrl+Alt+F", true, None::<&str>)?;
-    let new_note = MenuItem::with_id(app, "new", "Nuova nota\tCtrl+Alt+N", true, None::<&str>)?;
+    let all_notes = MenuItem::with_id(app, "all", crate::i18n::tr("Tutte le note\tCtrl+Alt+L", "All notes\tCtrl+Alt+L"), true, None::<&str>)?;
+    let search = MenuItem::with_id(app, "search", crate::i18n::tr("Cerca ovunque\tCtrl+Alt+F", "Search everywhere\tCtrl+Alt+F"), true, None::<&str>)?;
+    let new_note = MenuItem::with_id(app, "new", crate::i18n::tr("Nuova nota\tCtrl+Alt+N", "New note\tCtrl+Alt+N"), true, None::<&str>)?;
     let new_reminder = MenuItem::with_id(
         app,
         "new-reminder",
-        "Nuova nota con promemoria\tCtrl+Alt+P",
+        crate::i18n::tr("Nuova nota con promemoria\tCtrl+Alt+P", "New note with reminder\tCtrl+Alt+P"),
         true,
         None::<&str>,
     )?;
     let capture_item = MenuItem::with_id(
         app,
         "capture",
-        "Salva gli appunti come nota\tCtrl+Alt+V",
+        crate::i18n::tr("Salva gli appunti come nota\tCtrl+Alt+V", "Save clipboard as a note\tCtrl+Alt+V"),
         true,
         None::<&str>,
     )?;
-    let deck = MenuItem::with_id(app, "deck", "Mostra/nascondi deck\tCtrl+Alt+H", true, None::<&str>)?;
-    let quiet_off = MenuItem::with_id(app, "dnd-off", "Riattiva le notifiche", false, None::<&str>)?;
+    let deck = MenuItem::with_id(app, "deck", crate::i18n::tr("Mostra/nascondi deck\tCtrl+Alt+H", "Show/hide deck\tCtrl+Alt+H"), true, None::<&str>)?;
+    let quiet_off = MenuItem::with_id(app, "dnd-off", crate::i18n::tr("Riattiva le notifiche", "Turn notifications back on"), false, None::<&str>)?;
     let quiet_menu = Submenu::with_items(
         app,
-        "Non disturbare",
+        crate::i18n::tr("Non disturbare", "Do not disturb"),
         true,
         &[
-            &MenuItem::with_id(app, "dnd-30", "Per 30 minuti", true, None::<&str>)?,
-            &MenuItem::with_id(app, "dnd-60", "Per 1 ora	Ctrl+Alt+D", true, None::<&str>)?,
-            &MenuItem::with_id(app, "dnd-120", "Per 2 ore", true, None::<&str>)?,
-            &MenuItem::with_id(app, "dnd-morning", "Fino a domattina", true, None::<&str>)?,
+            &MenuItem::with_id(app, "dnd-30", crate::i18n::tr("Per 30 minuti", "For 30 minutes"), true, None::<&str>)?,
+            &MenuItem::with_id(app, "dnd-60", crate::i18n::tr("Per 1 ora\tCtrl+Alt+D", "For 1 hour\tCtrl+Alt+D"), true, None::<&str>)?,
+            &MenuItem::with_id(app, "dnd-120", crate::i18n::tr("Per 2 ore", "For 2 hours"), true, None::<&str>)?,
+            &MenuItem::with_id(app, "dnd-morning", crate::i18n::tr("Fino a domattina", "Until tomorrow morning"), true, None::<&str>)?,
             &PredefinedMenuItem::separator(app)?,
             &quiet_off,
         ],
@@ -55,16 +55,16 @@ pub fn create(app: &AppHandle) -> tauri::Result<()> {
         submenu: quiet_menu.clone(),
         off: quiet_off,
     });
-    let settings = MenuItem::with_id(app, "settings", "Impostazioni…", true, None::<&str>)?;
+    let settings = MenuItem::with_id(app, "settings", crate::i18n::tr("Impostazioni…", "Settings…"), true, None::<&str>)?;
     let autostart = CheckMenuItem::with_id(
         app,
         "autostart",
-        "Avvia con Windows",
+        crate::i18n::tr("Avvia con Windows", "Start with Windows"),
         true,
         autostart_enabled,
         None::<&str>,
     )?;
-    let quit = MenuItem::with_id(app, "quit", "Esci", true, None::<&str>)?;
+    let quit = MenuItem::with_id(app, "quit", crate::i18n::tr("Esci", "Quit"), true, None::<&str>)?;
     app.manage(AutostartMenuItem(autostart.clone()));
     let menu = Menu::with_items(
         app,

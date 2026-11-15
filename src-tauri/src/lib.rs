@@ -4,6 +4,7 @@ mod crypto;
 mod db;
 mod dock;
 mod export;
+mod i18n;
 mod media;
 mod organize;
 mod phone;
@@ -101,9 +102,17 @@ fn folder_counts(db: State<Db>) -> Result<FolderCounts, String> {
 fn folder_name(name: &str) -> Result<&str, String> {
     let name = name.trim();
     if name.is_empty() {
-        Err("il nome della cartella è vuoto".into())
+        Err(crate::i18n::tr("il nome della cartella è vuoto", "the folder name is empty").into())
     } else {
         Ok(name)
+    }
+}
+
+fn folder_exists(name: &str) -> String {
+    if crate::i18n::is_english() {
+        format!("a folder called \"{}\" already exists", name.trim())
+    } else {
+        format!("esiste già una cartella \"{}\"", name.trim())
     }
 }
 
@@ -111,7 +120,7 @@ fn folder_name(name: &str) -> Result<&str, String> {
 fn create_folder(window: WebviewWindow, db: State<Db>, name: String) -> Result<i64, String> {
     let id = db
         .create_folder(folder_name(&name)?)
-        .map_err(|_| format!("esiste già una cartella \"{}\"", name.trim()))?;
+        .map_err(|_| folder_exists(&name))?;
     notify_changed(&window);
     Ok(id)
 }
@@ -119,7 +128,7 @@ fn create_folder(window: WebviewWindow, db: State<Db>, name: String) -> Result<i
 #[tauri::command]
 fn rename_folder(window: WebviewWindow, db: State<Db>, id: i64, name: String) -> Result<(), String> {
     db.rename_folder(id, folder_name(&name)?)
-        .map_err(|_| format!("esiste già una cartella \"{}\"", name.trim()))?;
+        .map_err(|_| folder_exists(&name))?;
     notify_changed(&window);
     Ok(())
 }
@@ -171,7 +180,7 @@ fn set_note_locked(window: WebviewWindow, db: State<Db>, id: i64, locked: bool) 
 #[tauri::command]
 fn unlock_note(db: State<Db>, settings: State<SettingsState>, id: i64, pin: String) -> Result<Note, String> {
     if !settings.get().verify_pin(&pin) {
-        return Err("PIN sbagliato".into());
+        return Err(crate::i18n::tr("PIN sbagliato", "Wrong PIN").into());
     }
     db.get(id).map_err(|e| e.to_string())
 }
@@ -211,8 +220,12 @@ fn notify_update_available(app: AppHandle, state: State<SettingsState>, version:
     }
     toast::simple(
         &app,
-        "Nuova versione disponibile",
-        &format!("Tabby {version} è pronto da scaricare. Clic per aprire la pagina."),
+        crate::i18n::tr("Nuova versione disponibile", "New version available"),
+        &if crate::i18n::is_english() {
+            format!("Tabby {version} is ready to download. Click to open the page.")
+        } else {
+            format!("Tabby {version} è pronto da scaricare. Clic per aprire la pagina.")
+        },
         move |_| {
             let _ = open::that(&url);
         },
@@ -249,17 +262,17 @@ fn check_forgotten_notes(
             pin::PLACEHOLDER
         } else {
             let t = note.title.trim();
-            if t.is_empty() { "Senza titolo" } else { t }
+            if t.is_empty() { crate::i18n::tr("Senza titolo", "Untitled") } else { t }
         };
-        ("Nota dimenticata", t.to_string())
+        (crate::i18n::tr("Nota dimenticata", "Forgotten note"), t.to_string())
     } else {
         (
-            "Note dimenticate",
-            format!(
-                "Hai {} note ferme da più di {} giorni.",
-                forgotten.len(),
-                settings.forgotten_days
-            ),
+            crate::i18n::tr("Note dimenticate", "Forgotten notes"),
+            if crate::i18n::is_english() {
+                format!("You have {} notes untouched for more than {} days.", forgotten.len(), settings.forgotten_days)
+            } else {
+                format!("Hai {} note ferme da più di {} giorni.", forgotten.len(), settings.forgotten_days)
+            },
         )
     };
     toast::simple(&app, title, &text, |app| show_all_notes_window(app));
@@ -772,8 +785,9 @@ pub fn run() {
         .setup(|app| {
             let data_dir = data_dir(app.handle())?;
             std::fs::create_dir_all(&data_dir)?;
-            app.manage(Db::open(&data_dir.join("notes.db"))?);
+            // Prima le impostazioni: la lingua serve già per le note di benvenuto.
             app.manage(SettingsState::load(data_dir.join("settings.json")));
+            app.manage(Db::open(&data_dir.join("notes.db"))?);
             // Pulizia dei file media non più usati, senza rallentare l'avvio.
             let handle = app.handle().clone();
             std::thread::spawn(move || {

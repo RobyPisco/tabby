@@ -88,10 +88,11 @@ pub fn toggle(app: &AppHandle) {
         return;
     }
     let text = match until {
+        Some(t) if crate::i18n::is_english() => format!("No notifications until {}.", clock(t)),
         Some(t) => format!("Niente notifiche fino alle {}.", clock(t)),
-        None => "Le notifiche sono di nuovo attive.".into(),
+        None => crate::i18n::tr("Le notifiche sono di nuovo attive.", "Notifications are back on.").into(),
     };
-    crate::toast::silent(app, "Non disturbare", &text);
+    crate::toast::silent(app, crate::i18n::tr("Non disturbare", "Do not disturb"), &text);
 }
 
 fn clock(t: i64) -> String {
@@ -106,8 +107,9 @@ fn clock(t: i64) -> String {
 pub fn refresh_tray(app: &AppHandle) {
     let until = quiet_until(&app.state::<SettingsState>().get(), now());
     let label = match until {
+        Some(t) if crate::i18n::is_english() => format!("Do not disturb · until {}", clock(t)),
         Some(t) => format!("Non disturbare · fino alle {}", clock(t)),
-        None => "Non disturbare".into(),
+        None => crate::i18n::tr("Non disturbare", "Do not disturb").into(),
     };
     let manual = app.state::<SettingsState>().get().dnd_until.is_some_and(|t| t > now());
     let key = format!("{label}|{manual}");

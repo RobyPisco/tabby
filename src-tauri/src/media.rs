@@ -42,7 +42,7 @@ pub fn save_image(app: AppHandle, request: Request<'_>) -> Result<String, String
         return Err("atteso il contenuto grezzo dell'immagine".into());
     };
     if bytes.is_empty() || bytes.len() > MAX_BYTES {
-        return Err("immagine vuota o più grande di 20 MB".into());
+        return Err(crate::i18n::tr("immagine vuota o più grande di 20 MB", "image empty or larger than 20 MB").into());
     }
     let ext = request
         .headers()
@@ -51,7 +51,7 @@ pub fn save_image(app: AppHandle, request: Request<'_>) -> Result<String, String
         .unwrap_or("png")
         .to_ascii_lowercase();
     if !ALLOWED_EXTENSIONS.contains(&ext.as_str()) {
-        return Err(format!("formato immagine non supportato: {ext}"));
+        return Err(format!("{}: {ext}", crate::i18n::tr("formato immagine non supportato", "unsupported image format")));
     }
     let name = format!("{:016x}.{ext}", content_hash(bytes));
     let path = media_dir(&app)?.join(&name);
@@ -83,7 +83,7 @@ pub fn save_attachment(app: AppHandle, request: Request<'_>) -> Result<String, S
         return Err("atteso il contenuto grezzo del file".into());
     };
     if bytes.len() > MAX_ATTACHMENT_BYTES {
-        return Err("file più grande di 100 MB".into());
+        return Err(crate::i18n::tr("file più grande di 100 MB", "file larger than 100 MB").into());
     }
     let original = request
         .headers()
@@ -126,7 +126,7 @@ pub fn open_media(app: AppHandle, name: String) -> Result<(), String> {
     }
     let path = media_dir(&app)?.join(&name);
     if !path.exists() {
-        return Err(format!("il file {name} non esiste più"));
+        return Err(if crate::i18n::is_english() { format!("the file {name} no longer exists") } else { format!("il file {name} non esiste più") });
     }
     app.opener()
         .open_path(path.to_string_lossy(), None::<&str>)

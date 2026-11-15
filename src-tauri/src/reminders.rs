@@ -112,10 +112,10 @@ fn repeat_unhandled(app: &AppHandle) {
 fn show_toast(app: &AppHandle, reminder: &DueReminder) {
     // Nota protetta: niente di titolo/corpo deve finire in una notifica di sistema.
     let (title, preview): (&str, String) = if reminder.locked {
-        ("🔒 Promemoria da una nota protetta", String::new())
+        (crate::i18n::tr("🔒 Promemoria da una nota protetta", "🔒 Reminder from a protected note"), String::new())
     } else {
         let title = if reminder.title.trim().is_empty() {
-            "Promemoria"
+            crate::i18n::tr("Promemoria", "Reminder")
         } else {
             reminder.title.trim()
         };
@@ -145,10 +145,10 @@ fn show_toast(app: &AppHandle, reminder: &DueReminder) {
         .scenario(Scenario::Reminder)
         .sound(sound(app))
         .add_button("⏱ 10 min", "snooze10")
-        .add_button("🕐 1 ora", "snooze60")
-        .add_button("🌅 Domani", "tomorrow")
-        .add_button("✓ Fatto", "done")
-        .add_button("⋯ Altro", "custom")
+        .add_button(crate::i18n::tr("🕐 1 ora", "🕐 1 hour"), "snooze60")
+        .add_button(crate::i18n::tr("🌅 Domani", "🌅 Tomorrow"), "tomorrow")
+        .add_button(crate::i18n::tr("✓ Fatto", "✓ Done"), "done")
+        .add_button(crate::i18n::tr("⋯ Altro", "⋯ More"), "custom")
         .on_activated(move |action| {
             // Clic sul corpo della notifica: nessuna azione, si apre la nota.
             apply_action(&handle, note_id, action.as_deref().unwrap_or("open"));
@@ -164,7 +164,16 @@ fn show_toast(app: &AppHandle, reminder: &DueReminder) {
 fn friendly_when(due: chrono::DateTime<Local>) -> String {
     let today = Local::now().date_naive();
     let time = due.format("%H:%M");
-    match (due.date_naive() - today).num_days() {
+    let days = (due.date_naive() - today).num_days();
+    if crate::i18n::is_english() {
+        return match days {
+            0 => format!("today at {time}"),
+            -1 => format!("yesterday at {time}"),
+            1 => format!("tomorrow at {time}"),
+            _ => format!("{} at {time}", due.format("%d/%m")),
+        };
+    }
+    match days {
         0 => format!("oggi alle {time}"),
         -1 => format!("ieri alle {time}"),
         1 => format!("domani alle {time}"),
@@ -175,8 +184,8 @@ fn friendly_when(due: chrono::DateTime<Local>) -> String {
 fn show_summary_toast(app: &AppHandle, count: usize) {
     let handle = app.clone();
     let result = with_icon(Toast::new(&app_id(app)))
-        .title(&format!("{count} promemoria scaduti"))
-        .text1("Aprili da \"Tutte le note\" o dal deck.")
+        .title(&if crate::i18n::is_english() { format!("{count} overdue reminders") } else { format!("{count} promemoria scaduti") })
+        .text1(crate::i18n::tr("Aprili da \"Tutte le note\" o dal deck.", "Open them from \"All notes\" or from the deck."))
         .sound(sound(app))
         .on_activated(move |_| {
             crate::show_all_notes_window(&handle);

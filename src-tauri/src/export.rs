@@ -128,7 +128,7 @@ pub fn file_name(title: &str, extension: &str, used: &mut HashSet<String>) -> St
         .collect();
     let mut stem: String = cleaned.trim().trim_end_matches('.').chars().take(80).collect();
     if stem.is_empty() {
-        stem = "Senza titolo".into();
+        stem = crate::i18n::tr("Senza titolo", "Untitled").into();
     }
     let mut name = format!("{stem}.{extension}");
     let mut n = 2;

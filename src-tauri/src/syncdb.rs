@@ -451,7 +451,7 @@ impl Db {
             return Ok(());
         }
         let taken: bool = conn.query_row("SELECT EXISTS (SELECT 1 FROM folders WHERE name = ?1)", [name], |r| r.get(0))?;
-        let name = if taken { format!("{name} (condivisa)") } else { name.to_string() };
+        let name = if taken { format!("{name} {}", crate::i18n::tr("(condivisa)", "(shared)")) } else { name.to_string() };
         conn.execute("DELETE FROM sync_tombstones WHERE uid = ?1", [uid])?;
         conn.execute("INSERT INTO folders (name, uid, changed_at) VALUES (?1, ?2, ?3)", params![name, uid, now_ms()])?;
         Ok(())

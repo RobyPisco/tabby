@@ -1,6 +1,6 @@
 <script lang="ts">
   import { clock } from "$lib/clock.svelte";
-  import { parseItalianDate } from "$lib/nlDate";
+  import { parseDate } from "$lib/nlDate";
   import { formatReminder, isOverdue, REPEAT_LABELS, type Note, type ReminderAction } from "$lib/notes";
   import { settings } from "$lib/settings.svelte";
 
@@ -22,7 +22,7 @@
   let root = $state<HTMLElement>();
   let phraseInput = $state<HTMLInputElement>();
   let phrase = $state("");
-  const parsed = $derived(phrase.trim() ? parseItalianDate(phrase) : null);
+  const parsed = $derived(phrase.trim() ? parseDate(phrase) : null);
 
   /** Scelte rapide del posticipo; "Stasera" diventa "Domani sera" dopo le 18. */
   const choices = $derived.by(() => {

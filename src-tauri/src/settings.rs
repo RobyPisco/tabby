@@ -83,6 +83,8 @@ pub struct Settings {
     pub sync_key: Option<String>,
     /// Cartelle di note condivise con altre persone, ognuna con la sua cartella cloud.
     pub shares: Vec<ShareConfig>,
+    /// Lingua: "auto" (quella di Windows), "it" o "en".
+    pub language: String,
 }
 
 /// Una cartella di note condivisa con altre persone (vedi `sync.rs`).
@@ -127,6 +129,7 @@ impl Default for Settings {
             device_id: String::new(),
             sync_key: None,
             shares: vec![],
+            language: "auto".into(),
         }
     }
 }
@@ -192,6 +195,7 @@ impl Settings {
             },
             sync_key: self.sync_key.filter(|k| crate::crypto::decode_key(k).is_some()),
             shares: self.shares,
+            language: one_of(self.language, &["auto", "it", "en"], &default.language),
         }
     }
 
@@ -233,10 +237,10 @@ impl Settings {
     /// Imposta il PIN la prima volta; usa `change_pin` per sostituirne uno già impostato.
     pub fn set_pin(&mut self, pin: &str) -> Result<(), String> {
         if self.has_pin() {
-            return Err("un PIN è già impostato".into());
+            return Err(crate::i18n::tr("un PIN è già impostato", "a PIN is already set").into());
         }
         if !crate::pin::is_valid(pin) {
-            return Err("il PIN deve avere 4-6 cifre".into());
+            return Err(crate::i18n::tr("il PIN deve avere 4-6 cifre", "the PIN must have 4-6 digits").into());
         }
         let (hash, salt) = crate::pin::hash(pin);
         self.pin_hash = Some(hash);
@@ -254,10 +258,10 @@ impl Settings {
 
     pub fn change_pin(&mut self, old_pin: &str, new_pin: &str) -> Result<(), String> {
         if !self.verify_pin(old_pin) {
-            return Err("PIN attuale sbagliato".into());
+            return Err(crate::i18n::tr("PIN attuale sbagliato", "current PIN is wrong").into());
         }
         if !crate::pin::is_valid(new_pin) {
-            return Err("il PIN deve avere 4-6 cifre".into());
+            return Err(crate::i18n::tr("il PIN deve avere 4-6 cifre", "the PIN must have 4-6 digits").into());
         }
         let (hash, salt) = crate::pin::hash(new_pin);
         self.pin_hash = Some(hash);
@@ -296,6 +300,7 @@ impl SettingsState {
             .and_then(|text| parse(&text))
             .unwrap_or_default()
             .sanitized();
+        crate::i18n::set_language(&value.language);
         let state = SettingsState {
             path,
             value: Mutex::new(value),
@@ -366,6 +371,7 @@ impl SettingsState {
 
     pub fn set(&self, settings: Settings) -> Result<Settings, String> {
         let settings = settings.sanitized();
+        crate::i18n::set_language(&settings.language);
         let text = serde_json::to_string_pretty(&settings).map_err(|e| e.to_string())?;
         std::fs::write(&self.path, text).map_err(|e| e.to_string())?;
         *self.value.lock().unwrap() = settings.clone();

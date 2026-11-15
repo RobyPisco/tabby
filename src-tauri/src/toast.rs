@@ -60,8 +60,8 @@ pub fn with_icon(toast: Toast) -> Toast {
 /// Prova di un suono dalle impostazioni, anche se le notifiche sono mute.
 pub fn preview(app: &AppHandle, name: &str) {
     let result = with_icon(Toast::new(&app_id(app)))
-        .title("Ecco il suono")
-        .text1("Così ti avviserà Tabby.")
+        .title(crate::i18n::tr("Ecco il suono", "This is the sound"))
+        .text1(crate::i18n::tr("Così ti avviserà Tabby.", "This is how Tabby will alert you."))
         .sound(Some(sound_by_name(name)))
         .show();
     if let Err(e) = result {

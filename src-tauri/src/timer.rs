@@ -172,12 +172,12 @@ fn finished_toast(app: &AppHandle, timer: &Timer) {
         .get(timer.note_id)
         .map(|n| n.title.trim().to_string())
         .unwrap_or_default();
-    let title = if title.is_empty() { "Senza titolo".to_string() } else { title };
+    let title = if title.is_empty() { crate::i18n::tr("Senza titolo", "Untitled").to_string() } else { title };
     let focus = timer.kind == "focus";
     let (heading, text) = if focus {
-        ("🍅 Tempo!", format!("{title} · {} min di concentrazione", timer.minutes))
+        (crate::i18n::tr("🍅 Tempo!", "🍅 Time's up!"), if crate::i18n::is_english() { format!("{title} · {} min of focus", timer.minutes) } else { format!("{title} · {} min di concentrazione", timer.minutes) })
     } else {
-        ("☕ Pausa finita", format!("Si riparte con «{title}»?"))
+        (crate::i18n::tr("☕ Pausa finita", "☕ Break over"), if crate::i18n::is_english() { format!("Back to “{title}”?") } else { format!("Si riparte con «{title}»?") })
     };
     let handle = app.clone();
     let (note_id, minutes) = (timer.note_id, timer.minutes);
@@ -189,12 +189,12 @@ fn finished_toast(app: &AppHandle, timer: &Timer) {
     toast = if focus {
         toast
             .add_button(&format!("☕ Pausa {BREAK_MINUTES} min"), "break")
-            .add_button(&format!("🔁 Altri {minutes} min"), "again")
+            .add_button(&if crate::i18n::is_english() { format!("🔁 {minutes} more min") } else { format!("🔁 Altri {minutes} min") }, "again")
     } else {
         toast.add_button(&format!("🍅 {FOCUS_MINUTES} min"), "focus")
     };
     let result = toast
-        .add_button("Chiudi", "dismiss")
+        .add_button(crate::i18n::tr("Chiudi", "Close"), "dismiss")
         .on_activated(move |action| {
             match action.as_deref() {
                 Some("break") => drop(start(&handle, note_id, BREAK_MINUTES, "break")),

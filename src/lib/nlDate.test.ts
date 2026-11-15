@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseItalianDate } from "./nlDate";
+import { parseDate, parseEnglishDate, parseItalianDate } from "./nlDate";
 
 // Martedì 29 settembre 2026, ore 17:40.
 const NOW = new Date(2026, 8, 29, 17, 40);
@@ -35,5 +35,37 @@ describe("parseItalianDate", () => {
 
   it.each(["", "boh", "alle 25", "domani forse", "tra poco"])("non capisce «%s»", (text) => {
     expect(parseItalianDate(text, NOW)).toBeNull();
+  });
+});
+
+describe("parseEnglishDate", () => {
+  it.each([
+    ["in 2 hours", at(2026, 9, 29, 19, 40)],
+    ["in 10 minutes", at(2026, 9, 29, 17, 50)],
+    ["in half an hour", at(2026, 9, 29, 18, 10)],
+    ["in an hour", at(2026, 9, 29, 18, 40)],
+    ["tomorrow at 9", at(2026, 9, 30, 9)],
+    ["Tomorrow at 6:30pm", at(2026, 9, 30, 18, 30)],
+    ["the day after tomorrow morning", at(2026, 10, 1, 9)],
+    ["tonight", at(2026, 9, 29, 20)],
+    ["at 9pm", at(2026, 9, 29, 21)],
+    ["at 9", at(2026, 9, 30, 9)],
+    ["monday", at(2026, 10, 5, 9)],
+    ["next monday at 10", at(2026, 10, 5, 10)],
+    ["on 5 october at 18:15", at(2026, 10, 5, 18, 15)],
+    ["october 5th", at(2026, 10, 5, 9)],
+    ["march 3", at(2027, 3, 3, 9)],
+    ["this afternoon at 4", at(2026, 9, 29, 16)],
+  ])("%s", (text, expected) => {
+    expect(parseEnglishDate(text, NOW)).toEqual(expected);
+  });
+
+  it.each(["", "whatever", "at 25", "tomorrow maybe", "soon"])("does not understand «%s»", (text) => {
+    expect(parseEnglishDate(text, NOW)).toBeNull();
+  });
+
+  it("parseDate understands both languages", () => {
+    expect(parseDate("domani alle 9", NOW)).toEqual(at(2026, 9, 30, 9));
+    expect(parseDate("tomorrow at 9", NOW)).toEqual(at(2026, 9, 30, 9));
   });
 });

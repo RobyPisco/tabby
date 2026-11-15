@@ -85,7 +85,7 @@ pub fn capture_clipboard(app: &AppHandle) {
     let origin = foreground_window();
     let text = app.clipboard().read_text().unwrap_or_default();
     if text.trim().is_empty() {
-        toast::simple(app, "Niente da salvare", "Negli appunti non c'è testo.", |_| {});
+        toast::simple(app, crate::i18n::tr("Niente da salvare", "Nothing to save"), crate::i18n::tr("Negli appunti non c'è testo.", "There is no text on the clipboard."), |_| {});
         return;
     }
     let db = app.state::<Db>();
@@ -96,11 +96,11 @@ pub fn capture_clipboard(app: &AppHandle) {
         Ok(note) => {
             notify_changed_from(app, "capture");
             let id = note.id;
-            toast::simple(app, "Salvata dagli appunti", &title, move |app| {
+            toast::simple(app, crate::i18n::tr("Salvata dagli appunti", "Saved from the clipboard"), &title, move |app| {
                 crate::reminders::open_note_in_deck(app, id);
             });
         }
-        Err(e) => toast::simple(app, "Nota non salvata", &e.to_string(), |_| {}),
+        Err(e) => toast::simple(app, crate::i18n::tr("Nota non salvata", "Note not saved"), &e.to_string(), |_| {}),
     }
 }
 
