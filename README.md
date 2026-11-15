@@ -30,7 +30,6 @@ L'installer non è ancora firmato: se Windows mostra "App non riconosciuta", sce
 - **Non disturbare**: per 30 minuti, 1-2 ore, fino a domattina o in una fascia oraria fissa (es. 22-8); i promemoria arrivano tutti insieme alla fine.
 - **Timer / pomodoro** su una nota: 25 min di concentrazione, pausa, durata a scelta; il tempo rimasto appare sulla linguetta e alla fine arriva una notifica con "Pausa" / "Altri 25 min".
 - **Backup automatico** giornaliero di note, immagini e impostazioni in una cartella a scelta (meglio su un altro disco o in OneDrive), con ripristino dalle impostazioni.
-- **Google Calendar** (facoltativo): gli eventi da 1 settimana fino a 3 mesi avanti diventano note in sola lettura con promemoria; Tabby chiede solo la lettura del calendario e, se lo attivi, funziona anche dietro proxy aziendali (PAC, autenticazione di Windows).
 - **Cattura rapida** degli appunti, **export** (Markdown/testo, un file per nota o file unico) e **import**.
 - **Impostazioni**: bordo, larghezza, schermo, carattere, colore delle note nuove, suono, tema, avvio con Windows.
 
@@ -50,21 +49,13 @@ L'installer non è ancora firmato: se Windows mostra "App non riconosciuta", sce
 
 Se un'altra app occupa già una scorciatoia globale, quella viene saltata senza bloccare l'avvio.
 
-## Google Calendar
-
-In *Impostazioni → Google Calendar* clicca "Collega Google", accedi dal browser e scegli i calendari. Gli eventi finiscono nella cartella «Calendario Google», in ordine di data e con un foglietto che mostra il giorno; nel deck compaiono solo quando si avvicinano (di default 7 giorni prima, si cambia in «Mostra nel deck»). Tabby ha il permesso di **sola lettura** (non può modificare né cancellare eventi) e il token resta sul tuo PC, in `%APPDATA%\it.pisco.tabby\gcal_token.json`.
-
-**Dietro un proxy aziendale** attiva «Usa il proxy di Windows»: Tabby usa le impostazioni di proxy di Windows (anche file PAC) e si autentica con le credenziali dell'utente collegato, come fa il browser. È spento di default: così Tabby si collega a Google direttamente, senza mai usare le tue credenziali di rete.
-
-Poiché l'app Google non è stata sottoposta alla verifica, al primo accesso Google mostra "app non verificata": scegli *Avanzate* → *Vai a Tabby (non sicuro)*.
-
 Maggiori dettagli nell'[informativa sulla privacy](PRIVACY.md).
 
 ## Dati
 
 Tutto resta sul PC, in `%APPDATA%\it.pisco.tabby\` (o nella cartella indicata da `TABBY_DATA_DIR`, utile per le prove): `notes.db` (SQLite), `media\` (immagini e allegati), `settings.json`. Dalle impostazioni c'è "Apri la cartella".
 
-**Backup**: una volta al giorno Tabby copia database, immagini e impostazioni in una cartella `tabby-AAAA-MM-GG_HHMMSS` (di default in `backups\` dentro la cartella dei dati, oppure dove scegli nelle impostazioni) e tiene gli ultimi 7. Le immagini uguali al backup precedente sono collegamenti fisici, quindi non occupano spazio due volte. Il token di Google non viene copiato. "Ripristina" sostituisce le note con quelle del backup, dopo aver salvato lo stato attuale in un nuovo backup.
+**Backup**: una volta al giorno Tabby copia database, immagini e impostazioni in una cartella `tabby-AAAA-MM-GG_HHMMSS` (di default in `backups\` dentro la cartella dei dati, oppure dove scegli nelle impostazioni) e tiene gli ultimi 7. Le immagini uguali al backup precedente sono collegamenti fisici, quindi non occupano spazio due volte. "Ripristina" sostituisce le note con quelle del backup, dopo aver salvato lo stato attuale in un nuovo backup.
 
 ## Sviluppo (Windows 11)
 
@@ -84,21 +75,12 @@ cd src-tauri; cargo test   # test di Rust
 npm run tauri build    # installer in src-tauri\target\release\bundle\ (nsis e msi)
 ```
 
-Per usare Google Calendar in locale serve il Client Secret del progetto Google Cloud: non sta nel repository ma si legge dalla variabile `TABBY_GOOGLE_CLIENT_SECRET` in compilazione. Crea il file `.cargo/config.toml` (ignorato da git) con:
-
-```toml
-[env]
-TABBY_GOOGLE_CLIENT_SECRET = "il-tuo-secret"
-```
-
-Nelle release di GitHub arriva dal secret del repository `GOOGLE_CLIENT_SECRET`. Senza, la build funziona ma "Collega Google" mostra un messaggio d'errore. Chi vuole usare un proprio progetto Google deve sostituire anche il `CLIENT_ID` in `src-tauri/src/gcal.rs`.
-
 In sviluppo le notifiche appaiono come "Windows PowerShell": l'app non è registrata in Windows finché non è installata. Versione di sviluppo e versione installata condividono dati e "istanza unica": non vanno tenute aperte insieme.
 
 L'icona (il gatto tigrato) sta in `assets/app-icon.png` e si applica con `npx tauri icon assets/app-icon.png` (l'icona piccola per l'area di notifica è `src-tauri/icons/tray.png`); le immagini dell'installer (da `assets/`) si rigenerano con `scripts\genera-immagini-installer.ps1`.
 
 ## Struttura
 
-- `src-tauri/src/` — `db.rs` (note, ricerca, promemoria), `organize.rs` (tag, cartelle, link, versioni), `reminders.rs` (scheduler), `toast.rs`, `dock.rs` (finestra del deck), `gcal.rs` e `http.rs` (Google Calendar, client WinHTTP), `capture.rs`, `export.rs`, `media.rs`, `settings.rs`, `tray.rs`, `lib.rs` (comandi e avvio).
+- `src-tauri/src/` — `db.rs` (note, ricerca, promemoria), `organize.rs` (tag, cartelle, link, versioni), `reminders.rs` (scheduler), `toast.rs`, `dock.rs` (finestra del deck), `capture.rs`, `export.rs`, `media.rs`, `settings.rs`, `tray.rs`, `lib.rs` (comandi e avvio).
 - `src/routes/+page.svelte` — il deck; `src/routes/all/+page.svelte` — "Tutte le note".
 - `src/lib/` — editor (`NoteEditor.svelte`, `editor/`), componenti condivisi, impostazioni, date a parole.

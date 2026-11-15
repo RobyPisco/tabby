@@ -13,5 +13,5 @@ Il codice numerico unico, globale per l'app, che sblocca la lettura/modifica di 
 _Avoid_: password, codice di sblocco
 
 **Nota dimenticata**:
-Una nota attiva (non archiviata, non cestinata, non fissata) senza promemoria/timer attivo e non legata a un evento Google Calendar, il cui `updated_at` supera la soglia configurabile delle Impostazioni (default 30 giorni). Genera un avviso una sola volta: tornare a modificarla la fa uscire da questo stato.
+Una nota attiva (non archiviata, non cestinata, non fissata) senza promemoria/timer attivo, il cui `updated_at` supera la soglia configurabile delle Impostazioni (default 30 giorni). Genera un avviso una sola volta: tornare a modificarla la fa uscire da questo stato.
 _Avoid_: nota vecchia, nota abbandonata, nota scaduta (si confonde con la scadenza di un promemoria)

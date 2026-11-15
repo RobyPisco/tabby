@@ -16,8 +16,6 @@ function note(overrides: Partial<Note> = {}): Note {
     repeat: null,
     pinned: false,
     folder_id: null,
-    gcal_event_id: null,
-    event_at: null,
     locked: false,
     ...overrides,
   };

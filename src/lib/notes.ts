@@ -16,10 +16,6 @@ export type Note = {
   repeat: Repeat | null;
   pinned: boolean;
   folder_id: number | null;
-  /** ID evento Google Calendar; `null` per le note normali. Nota in sola lettura. */
-  gcal_event_id: string | null;
-  /** Inizio dell'evento Google Calendar (non risente del posticipo); `null` per le note normali. */
-  event_at: number | null;
   /** Protetta da PIN: titolo/corpo sono oscurati finché non si verifica il PIN per questa apertura. */
   locked: boolean;
 };

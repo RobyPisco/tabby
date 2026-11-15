@@ -25,10 +25,6 @@ pub struct Note {
     /// Fissata in alto nel deck e nell'elenco.
     pub pinned: bool,
     pub folder_id: Option<i64>,
-    /// ID univoco dell'evento Google Calendar; `None` per le note normali.
-    pub gcal_event_id: Option<String>,
-    /// Inizio dell'evento Google Calendar (non risente del posticipo); `None` per le note normali.
-    pub event_at: Option<i64>,
     /// Protetta da PIN: titolo/corpo vanno oscurati ovunque, finché non si verifica il PIN
     /// per questa apertura (vedi `redact_if_locked` e ADR-0001).
     pub locked: bool,
@@ -69,18 +65,15 @@ pub(crate) fn row_to_note(row: &Row) -> rusqlite::Result<Note> {
         repeat: row.get(9)?,
         pinned: row.get::<_, i64>(10)? != 0,
         folder_id: row.get(11)?,
-        gcal_event_id: row.get(12)?,
-        event_at: row.get(13)?,
-        locked: row.get::<_, i64>(14)? != 0,
-        forgotten_notified: row.get::<_, i64>(15)? != 0,
+        locked: row.get::<_, i64>(12)? != 0,
+        forgotten_notified: row.get::<_, i64>(13)? != 0,
     })
 }
 
 pub(crate) const COLUMNS: &str = "id, title, body, color, archived, created_at, updated_at, deleted_at, \
-                       COALESCE(snoozed_until, due_at), repeat, pinned, folder_id, gcal_event_id, \
-                       CASE WHEN gcal_event_id IS NOT NULL THEN due_at END, locked, forgotten_notified";
+                       COALESCE(snoozed_until, due_at), repeat, pinned, folder_id, locked, forgotten_notified";
 
-/// Note attive, non fissate, senza promemoria né timer attivo, non eventi Google Calendar,
+/// Note attive, non fissate, senza promemoria né timer attivo,
 /// non già segnalate, ferme da almeno `threshold_secs` (vedi GLOSSARY.md "Nota dimenticata").
 /// `timed_ids` sono gli id con un timer attivo in questo momento (stato di `TimerState`, non
 /// persistito su `Note`).
@@ -97,7 +90,6 @@ pub(crate) fn forgotten_notes<'a>(
                 && n.deleted_at.is_none()
                 && !n.pinned
                 && n.remind_at.is_none()
-                && n.gcal_event_id.is_none()
                 && !n.forgotten_notified
                 && !timed_ids.contains(&n.id)
                 && now - n.updated_at >= threshold_secs
@@ -117,13 +109,9 @@ pub(crate) fn redact_if_locked(note: Note) -> Note {
         ..note
     }
 }
-/// Ordine degli elenchi: fissate in cima, poi le note normali (`notes_order`),
-/// poi gli eventi di Google Calendar dal più vicino al più lontano.
+/// Ordine degli elenchi: fissate in cima, poi le note secondo `notes_order`.
 fn list_order(notes_order: &str) -> String {
-    format!(
-        "pinned DESC, gcal_event_id IS NOT NULL, \
-         CASE WHEN gcal_event_id IS NOT NULL THEN reminders.due_at END ASC, {notes_order}"
-    )
+    format!("pinned DESC, {notes_order}")
 }
 
 /// Ogni nota con il suo eventuale promemoria (al massimo uno per nota).
@@ -133,9 +121,6 @@ const EFFECTIVE_DUE: &str = "COALESCE(r.snoozed_until, r.due_at)";
 /// Promemoria ancora da notificare per la scadenza attuale, su note attive.
 const PENDING: &str = "n.deleted_at IS NULL AND n.archived = 0 \
                        AND (r.fired_at IS NULL OR r.fired_at < COALESCE(r.snoozed_until, r.due_at))";
-
-/// Quanti giorni prima dell'inizio un evento di Google Calendar compare nel deck (predefinito).
-pub const DECK_GCAL_DAYS: u32 = 7;
 
 /// Le note restano nel cestino 30 giorni, poi vengono eliminate all'avvio.
 const TRASH_RETENTION_SECS: i64 = 30 * 24 * 60 * 60;
@@ -178,18 +163,10 @@ fn migrate(conn: &Connection) -> rusqlite::Result<()> {
     add_column_if_missing(conn, "deleted_at", "INTEGER")?;
     add_column_if_missing(conn, "pinned", "INTEGER NOT NULL DEFAULT 0")?;
     add_column_if_missing(conn, "folder_id", "INTEGER")?;
-    add_column_if_missing(conn, "gcal_event_id", "TEXT")?;
-    // 1 = nota messa nel cestino dalla sync (evento sparito da Google), non dall'utente:
-    // se l'evento ricompare, la sync la ripristina.
-    add_column_if_missing(conn, "gcal_stale", "INTEGER NOT NULL DEFAULT 0")?;
     add_column_if_missing(conn, "locked", "INTEGER NOT NULL DEFAULT 0")?;
     add_column_if_missing(conn, "forgotten_notified", "INTEGER NOT NULL DEFAULT 0")?;
     crate::organize::create_tables(conn)?;
-    // Indice univoco per gcal_event_id: evita duplicati alla sync.
-    conn.execute_batch(
-        "CREATE UNIQUE INDEX IF NOT EXISTS notes_gcal_event_id
-             ON notes(gcal_event_id) WHERE gcal_event_id IS NOT NULL;",
-    )?;
+    remove_google_calendar(conn)?;
     // `due_at` è la scadenza della serie; `snoozed_until` un posticipo che non sposta la serie;
     // `fired_at` quando è partita l'ultima notifica, per non ripeterla.
     conn.execute_batch(
@@ -204,6 +181,26 @@ fn migrate(conn: &Connection) -> rusqlite::Result<()> {
              DELETE FROM reminders WHERE note_id = old.id;
          END;",
     )?;
+    Ok(())
+}
+
+/// Google Calendar non c'è più: le note importate dal calendario erano solo copie degli
+/// eventi, quindi si eliminano, insieme alla cartella "Calendario Google" se resta vuota.
+/// Le colonne `gcal_event_id`/`gcal_stale` restano nei database vecchi ma non si usano più.
+fn remove_google_calendar(conn: &Connection) -> rusqlite::Result<()> {
+    let has_column: bool = conn.query_row(
+        "SELECT EXISTS (SELECT 1 FROM pragma_table_info('notes') WHERE name = 'gcal_event_id')",
+        [],
+        |r| r.get(0),
+    )?;
+    if has_column {
+        conn.execute_batch(
+            "DROP INDEX IF EXISTS notes_gcal_event_id;
+             DELETE FROM notes WHERE gcal_event_id IS NOT NULL;
+             DELETE FROM folders WHERE name = 'Calendario Google'
+                 AND NOT EXISTS (SELECT 1 FROM notes WHERE notes.folder_id = folders.id);",
+        )?;
+    }
     Ok(())
 }
 
@@ -318,23 +315,20 @@ impl Db {
         Ok(())
     }
 
-    /// Note del deck, con gli eventi di Google Calendar dei prossimi `DECK_GCAL_DAYS` giorni.
+    /// Note attive (quelle del deck).
     pub fn list_active(&self) -> rusqlite::Result<Vec<Note>> {
-        self.list_deck(DECK_GCAL_DAYS)
+        self.list_deck()
     }
 
-    /// Note del deck. Gli eventi di Google Calendar compaiono solo `gcal_days` giorni prima
-    /// dell'inizio (0 = quando inizia): con mesi di calendario il deck sarebbe pieno di
-    /// linguette. Gli altri restano in "Tutte le note".
-    pub fn list_deck(&self, gcal_days: u32) -> rusqlite::Result<Vec<Note>> {
+    /// Note del deck: attive, fissate in cima, poi in ordine di creazione.
+    pub fn list_deck(&self) -> rusqlite::Result<Vec<Note>> {
         let conn = self.0.lock().unwrap();
         let mut stmt = conn.prepare(&format!(
             "SELECT {COLUMNS} FROM {NOTES_JOIN} WHERE archived = 0 AND deleted_at IS NULL
-                 AND (gcal_event_id IS NULL OR reminders.due_at IS NULL OR reminders.due_at <= ?1)
              ORDER BY {}",
             list_order("id ASC")
         ))?;
-        let rows = stmt.query_map([now() + i64::from(gcal_days) * 24 * 60 * 60], row_to_note)?;
+        let rows = stmt.query_map([], row_to_note)?;
         rows.collect()
     }
 
@@ -401,8 +395,7 @@ impl Db {
         rows.collect()
     }
 
-    /// Note per la finestra "Tutte le note": fissate prima, poi dalla più recente,
-    /// poi gli eventi di Google Calendar in ordine di data.
+    /// Note per la finestra "Tutte le note": fissate prima, poi dalla più recente.
     /// `query` vuota = nessun filtro testuale; `folder` 0 = senza cartella; `tag` senza "#".
     pub fn search(
         &self,
@@ -627,68 +620,6 @@ impl Db {
         tx.commit()
     }
 
-    // -- Google Calendar -------------------------------------------------------
-
-    pub fn upsert_gcal_note(
-        &self, gcal_event_id: &str, title: &str, body: &str,
-        color: &str, remind_at: i64, folder_id: i64,
-    ) -> rusqlite::Result<()> {
-        let conn = self.0.lock().unwrap();
-        let t = now();
-        conn.execute(
-            "INSERT INTO notes (title, body, color, folder_id, gcal_event_id, created_at, updated_at) \
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?6) \
-             ON CONFLICT (gcal_event_id) WHERE gcal_event_id IS NOT NULL DO UPDATE SET \
-             title=excluded.title, body=excluded.body, updated_at=?6, \
-             deleted_at = CASE WHEN gcal_stale = 1 THEN NULL ELSE deleted_at END, gcal_stale = 0",
-            params![title, body, color, folder_id, gcal_event_id, t],
-        )?;
-        let note_id: i64 = conn.query_row(
-            "SELECT id FROM notes WHERE gcal_event_id = ?1",
-            [gcal_event_id], |r| r.get(0),
-        )?;
-        conn.execute(
-            "INSERT INTO reminders (note_id, due_at, repeat) VALUES (?1, ?2, 'none') \
-             ON CONFLICT (note_id) DO UPDATE SET              snoozed_until = CASE WHEN due_at <> ?2 THEN NULL ELSE snoozed_until END,              fired_at = CASE WHEN due_at <> ?2 THEN NULL ELSE fired_at END,              due_at = ?2",
-            params![note_id, remind_at],
-        )?;
-        Ok(())
-    }
-
-    pub fn trash_stale_gcal_notes(
-        &self, current_ids: &[String], calendar_ids: &[String],
-    ) -> rusqlite::Result<()> {
-        if calendar_ids.is_empty() { return Ok(()); }
-        let conn = self.0.lock().unwrap();
-        let t = now();
-        let mut stmt = conn.prepare(
-            "SELECT gcal_event_id FROM notes WHERE gcal_event_id IS NOT NULL AND deleted_at IS NULL",
-        )?;
-        let existing: Vec<String> = stmt
-            .query_map([], |r| r.get(0))?
-            .filter_map(|r| r.ok())
-            .filter(|eid: &String| calendar_ids.iter().any(|cid| eid.starts_with(&format!("{cid}_"))))
-            .collect();
-        for eid in existing.iter().filter(|eid| !current_ids.contains(eid)) {
-            conn.execute(
-                "UPDATE notes SET deleted_at = ?1, gcal_stale = 1 WHERE gcal_event_id = ?2",
-                params![t, eid],
-            )?;
-        }
-        Ok(())
-    }
-
-    pub fn gcal_folder_id(&self) -> rusqlite::Result<i64> {
-        let conn = self.0.lock().unwrap();
-        match conn.query_row("SELECT id FROM folders WHERE name = 'Calendario Google'", [], |r| r.get(0)) {
-            Ok(id) => Ok(id),
-            Err(rusqlite::Error::QueryReturnedNoRows) => {
-                conn.execute("INSERT INTO folders (name) VALUES ('Calendario Google')", [])?;
-                Ok(conn.last_insert_rowid())
-            }
-            Err(e) => Err(e),
-        }
-    }
 
 }
 
@@ -700,7 +631,7 @@ mod tests {
         Db::open(Path::new(":memory:")).expect("database in memoria")
     }
 
-    /// Nota "normale": attiva, non fissata, senza promemoria, non un evento Google, non
+    /// Nota "normale": attiva, non fissata, senza promemoria, non
     /// protetta, non già segnalata come dimenticata. I singoli test la specializzano.
     fn sample_note(id: i64, updated_at: i64) -> Note {
         Note {
@@ -716,8 +647,6 @@ mod tests {
             repeat: None,
             pinned: false,
             folder_id: None,
-            gcal_event_id: None,
-            event_at: None,
             locked: false,
             forgotten_notified: false,
         }
@@ -755,13 +684,6 @@ mod tests {
         let notes = vec![sample_note(1, 1000)];
         let timed: HashSet<i64> = [1].into_iter().collect();
         let result = forgotten_notes(&notes, &timed, 100_000, 1000);
-        assert!(result.is_empty());
-    }
-
-    #[test]
-    fn an_old_google_calendar_event_is_not_forgotten() {
-        let notes = vec![Note { gcal_event_id: Some("abc".into()), ..sample_note(1, 1000) }];
-        let result = forgotten_notes(&notes, &HashSet::new(), 100_000, 1000);
         assert!(result.is_empty());
     }
 
@@ -963,55 +885,27 @@ mod tests {
     }
 
     #[test]
-    fn gcal_sync_restores_only_notes_it_trashed() {
-        let db = db();
-        let folder = db.gcal_folder_id().unwrap();
-        let t = now() + 86_400;
-        let cals = vec!["cal".to_string()];
-        db.upsert_gcal_note("cal_a", "Evento A", "", "#b5d3f7", t, folder).unwrap();
-        db.upsert_gcal_note("cal_b", "Evento B", "", "#b5d3f7", t, folder).unwrap();
-        let titles = |db: &Db| -> Vec<String> {
-            db.search("evento", Filter::All, None, None).unwrap().into_iter().map(|n| n.title).collect()
-        };
-        // A esce dalla finestra di sync: cestino. B la elimina l'utente.
-        db.trash_stale_gcal_notes(&["cal_b".to_string()], &cals).unwrap();
-        let b = db.search("evento b", Filter::All, None, None).unwrap()[0].id;
-        db.set_trashed(&[b], true).unwrap();
-        // Entrambi gli eventi tornano nella sync: A riappare, B resta nel cestino.
-        db.upsert_gcal_note("cal_a", "Evento A", "", "#b5d3f7", t, folder).unwrap();
-        db.upsert_gcal_note("cal_b", "Evento B", "", "#b5d3f7", t, folder).unwrap();
-        assert_eq!(titles(&db), vec!["Evento A".to_string()]);
-    }
-
-    #[test]
-    fn calendar_events_follow_notes_in_date_order() {
-        let db = db();
-        let folder = db.gcal_folder_id().unwrap();
-        let t = now();
-        db.upsert_gcal_note("cal_tardi", "Tardi", "", "#b5d3f7", t + 3 * 86_400, folder).unwrap();
-        db.upsert_gcal_note("cal_presto", "Presto", "", "#b5d3f7", t + 86_400, folder).unwrap();
-        let nota = db.create_full("Nota", "", "#b5d3f7").unwrap();
-        let titles = |notes: Vec<Note>| -> Vec<String> { notes.into_iter().map(|n| n.title).collect() };
-        let all = titles(db.search("", Filter::All, None, None).unwrap());
-        let expected = ["Nota", "Presto", "Tardi"].map(String::from);
-        assert_eq!(all.iter().filter(|t| expected.contains(t)).cloned().collect::<Vec<_>>(), expected);
-        assert_eq!(&all[all.len() - 2..], &expected[1..]);
-        let deck = titles(db.list_active().unwrap());
-        assert_eq!(&deck[deck.len() - 2..], &expected[1..]);
-        assert_eq!(db.get(nota.id).unwrap().event_at, None);
-    }
-
-    #[test]
-    fn deck_shows_only_upcoming_calendar_events() {
-        let db = db();
-        let folder = db.gcal_folder_id().unwrap();
-        let t = now();
-        db.upsert_gcal_note("cal_vicino", "Dentista", "", "#b5d3f7", t + 2 * 86_400, folder).unwrap();
-        db.upsert_gcal_note("cal_lontano", "Ferie", "", "#b5d3f7", t + 40 * 86_400, folder).unwrap();
-        let deck: Vec<String> = db.list_active().unwrap().into_iter().map(|n| n.title).collect();
-        assert!(deck.contains(&"Dentista".to_string()));
-        assert!(!deck.contains(&"Ferie".to_string()));
-        // In "Tutte le note" c'è anche l'evento lontano.
-        assert_eq!(db.search("ferie", Filter::Active, None, None).unwrap().len(), 1);
+    fn old_google_calendar_notes_are_removed_on_open() {
+        let dir = std::env::temp_dir().join(format!("tabby-gcal-{}", now()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("notes.db");
+        {
+            let db = Db::open(&path).unwrap();
+            let conn = db.0.lock().unwrap();
+            conn.execute_batch(
+                "ALTER TABLE notes ADD COLUMN gcal_event_id TEXT;
+                 INSERT INTO folders (name) VALUES ('Calendario Google');
+                 INSERT INTO notes (title, body, color, created_at, updated_at, gcal_event_id, folder_id)
+                     VALUES ('Dentista', '', '#fff', 1, 1, 'cal_x', last_insert_rowid());
+                 INSERT INTO notes (title, body, color, created_at, updated_at) VALUES ('Mia', '', '#fff', 1, 1);",
+            ).unwrap();
+        }
+        let db = Db::open(&path).unwrap();
+        let titles: Vec<String> = db.search("", Filter::All, None, None).unwrap().into_iter().map(|n| n.title).collect();
+        assert!(titles.contains(&"Mia".to_string()));
+        assert!(!titles.contains(&"Dentista".to_string()));
+        assert!(db.list_folders().unwrap().iter().all(|f| f.name != "Calendario Google"));
+        drop(db);
+        std::fs::remove_dir_all(&dir).unwrap();
     }
 }

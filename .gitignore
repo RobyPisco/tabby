@@ -9,5 +9,3 @@ node_modules
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 
-# Credenziali locali (vedi README, sezione Google Calendar)
-/.cargo/

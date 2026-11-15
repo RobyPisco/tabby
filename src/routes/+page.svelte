@@ -4,7 +4,6 @@
   import { getVersion } from "@tauri-apps/api/app";
   import { onMount, tick } from "svelte";
   import { clock } from "$lib/clock.svelte";
-  import CalendarTile from "$lib/CalendarTile.svelte";
   import ColorPicker from "$lib/ColorPicker.svelte";
   import NoteEditor from "$lib/NoteEditor.svelte";
   import { saveFile } from "$lib/editor/media";
@@ -209,13 +208,6 @@
       if (phase === "open") setPhase("fan");
     }
   }
-
-  // Cambiati nelle impostazioni i giorni di anticipo degli eventi Google: il deck si aggiorna.
-  let deckDays: number | undefined;
-  $effect(() => {
-    if (deckDays !== undefined && deckDays !== settings.gcal_deck_days) reload();
-    deckDays = settings.gcal_deck_days;
-  });
 
   /** Controlla se c'è una versione più nuova su GitHub e, se sì, lo fa sapere con una
    *  notifica di sistema (al massimo una volta per versione, vedi notify_update_available). */
@@ -453,17 +445,6 @@
     editing = false;
   }
 
-  /** Sposta la nota nel cestino (si recupera dalla finestra "Tutte le note"). */
-  async function trashOpen() {
-    if (!openNote) return;
-    const id = openNote.id;
-    await flushSave();
-    await invoke("set_trashed", { ids: [id], trashed: true });
-    notes = notes.filter((n) => n.id !== id);
-    openId = null;
-    editing = false;
-  }
-
   function onKeydown(event: KeyboardEvent) {
     if (event.key === "Escape" && phase !== "rest") {
       (document.activeElement as HTMLElement | null)?.blur();
@@ -524,13 +505,7 @@
         onclick={() => openNoteById(note.id)}
         aria-label={note.title || "Senza titolo"}
       >
-        {#if note.gcal_event_id !== null}
-          <svg class="tab-cal" viewBox="0 0 20 20" aria-hidden="true">
-            <rect x="3" y="4" width="14" height="13" rx="2.5" /><path d="M3 8h14M7 2.5v3M13 2.5v3" />
-          </svg>
-        {:else}
-          <span class="dot"></span>
-        {/if}
+        <span class="dot"></span>
         <span class="label">{note.title || "Senza titolo"}</span>
         {#if note.locked}
           <svg class="tab-lock" viewBox="0 0 20 20" aria-hidden="true" aria-label="Protetta con PIN">
@@ -580,28 +555,19 @@
         onfocusout={() => (editing = false)}
       >
         <header>
-          {#if openNote.gcal_event_id !== null}
-            <span class="gcal-chip" title="Evento di Google Calendar · sola lettura">
-              <svg viewBox="0 0 20 20" aria-hidden="true">
-                <rect x="3" y="4" width="14" height="13" rx="2.5" /><path d="M3 8h14M7 2.5v3M13 2.5v3" />
-              </svg>
-              Google Calendar
-            </span>
-          {:else}
-            <span class="spacer"></span>
-            <button
-              class="icon-btn"
-              onmousedown={(e) => e.preventDefault()}
-              onclick={() => editor?.toggleChecklist()}
-              aria-label="Casella da spuntare"
-              title="Casella da spuntare (Ctrl+L)"
-            >
-              <svg viewBox="0 0 20 20" aria-hidden="true">
-                <rect x="3" y="3" width="14" height="14" rx="3.5" />
-                <path d="m6.5 10.2 2.4 2.4 4.6-5" />
-              </svg>
-            </button>
-          {/if}
+          <span class="spacer"></span>
+          <button
+            class="icon-btn"
+            onmousedown={(e) => e.preventDefault()}
+            onclick={() => editor?.toggleChecklist()}
+            aria-label="Casella da spuntare"
+            title="Casella da spuntare (Ctrl+L)"
+          >
+            <svg viewBox="0 0 20 20" aria-hidden="true">
+              <rect x="3" y="3" width="14" height="14" rx="3.5" />
+              <path d="m6.5 10.2 2.4 2.4 4.6-5" />
+            </svg>
+          </button>
           <button
             class="icon-btn"
             class:on={openNote.pinned}
@@ -613,14 +579,12 @@
           >
             <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M7.5 2.5h5l-.8 4.2 2.8 2.8v1.5H5.5V9.5l2.8-2.8-.8-4.2ZM10 11v6.5" /></svg>
           </button>
-          {#if openNote.gcal_event_id === null}
-            <LockButton
-              note={openNote}
-              unlocked={unlockedNote}
-              onunlocked={(real) => (unlockedNote = real)}
-              onlockedchange={(l) => (openNote.locked = l)}
-            />
-          {/if}
+          <LockButton
+            note={openNote}
+            unlocked={unlockedNote}
+            onunlocked={(real) => (unlockedNote = real)}
+            onlockedchange={(l) => (openNote.locked = l)}
+          />
           <TimerButton noteId={openNote.id} />
           <ReminderPicker
             remindAt={openNote.remind_at}
@@ -631,27 +595,8 @@
           />
           <ColorPicker color={openNote.color} onpick={setColor} />
           <button class="archive" onclick={archiveOpen} title="Archivia">Archivia</button>
-          {#if openNote.gcal_event_id !== null}
-            <button class="archive" onclick={trashOpen} title="Sposta nel cestino">Elimina</button>
-          {/if}
         </header>
-        {#if openNote.gcal_event_id !== null}
-          <div class="gcal-title">
-            {#if openNote.event_at !== null}
-              <CalendarTile at={openNote.event_at} color={openNote.color} />
-            {/if}
-            <h2>{openNote.title || "(senza titolo)"}</h2>
-          </div>
-          <ReminderLine note={openNote} onaction={reminderAction} onsnooze={snoozeUntil} bind:snoozeOpen />
-          <NoteEditor
-            bind:this={editor}
-            value={openNote.body}
-            onchange={setBody}
-            onopenlink={openLink}
-            readonly
-            placeholder="Nessun dettaglio"
-          />
-        {:else if locked}
+        {#if locked}
           <LockedContent noteId={openNote.id} onunlocked={(real) => (unlockedNote = real)} />
         {:else}
           <textarea
@@ -676,42 +621,6 @@
 </div>
 
 <style>
-  /* Eventi di Google Calendar: etichetta al posto del titolo modificabile,
-     poi foglietto con la data e titolo intero, anche su più righe. */
-  .gcal-chip {
-    flex: 1;
-    min-width: 0;
-    display: flex;
-    align-items: center;
-    gap: 5px;
-    overflow: hidden;
-    white-space: nowrap;
-    font-size: 11px;
-    font-weight: 600;
-    color: rgba(0, 0, 0, 0.6);
-  }
-  .gcal-chip svg {
-    flex: none;
-    width: 15px;
-    height: 15px;
-    fill: none;
-    stroke: currentColor;
-    stroke-width: 1.7;
-    stroke-linecap: round;
-  }
-  .gcal-title {
-    display: flex;
-    align-items: flex-start;
-    gap: 10px;
-  }
-  .gcal-title h2 {
-    flex: 1;
-    min-width: 0;
-    margin: 2px 0 0;
-    overflow-wrap: anywhere;
-    font: 700 16px/1.3 "Segoe UI", system-ui, sans-serif;
-    color: rgba(0, 0, 0, 0.85);
-  }
 
   :global(html),
   :global(body) {
@@ -840,17 +749,6 @@
     box-shadow:
       0 0 0 3px color-mix(in srgb, var(--c) 30%, transparent),
       0 0 10px var(--c);
-  }
-  .tab-cal {
-    flex: none;
-    width: 14px;
-    height: 14px;
-    margin: 0 -2px;
-    fill: none;
-    stroke: var(--c);
-    stroke-width: 2;
-    stroke-linecap: round;
-    filter: drop-shadow(0 0 4px var(--c));
   }
   .label {
     flex: 1;

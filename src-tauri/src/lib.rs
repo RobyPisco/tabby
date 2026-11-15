@@ -3,8 +3,6 @@ mod capture;
 mod db;
 mod dock;
 mod export;
-mod gcal;
-mod http;
 mod media;
 mod organize;
 mod pin;
@@ -16,7 +14,6 @@ mod toast;
 mod tray;
 
 use db::{Db, Filter, Note};
-use gcal::{GcalCalendar, GcalState, GcalStatus};
 use organize::{Folder, FolderCounts, NoteRef, TagCount, Version};
 use reminders::Scheduler;
 use serde::Serialize;
@@ -55,9 +52,9 @@ fn set_interactive(window: WebviewWindow, interactive: bool) -> Result<(), Strin
 }
 
 #[tauri::command]
-fn list_notes(db: State<Db>, settings: State<SettingsState>) -> Result<Vec<Note>, String> {
+fn list_notes(db: State<Db>) -> Result<Vec<Note>, String> {
     Ok(db
-        .list_deck(settings.get().gcal_deck_days)
+        .list_deck()
         .map_err(|e| e.to_string())?
         .into_iter()
         .map(db::redact_if_locked)
@@ -610,57 +607,13 @@ fn show_all_notes(app: AppHandle) {
 }
 
 
-// -- Google Calendar ----------------------------------------------------------
-
-#[tauri::command]
-fn gcal_status(state: State<GcalState>) -> GcalStatus {
-    state.status()
-}
-
-/// Esegue una chiamata di rete bloccante fuori dal thread della UI.
+/// Esegue un lavoro lungo (backup, ripristino) fuori dal thread della UI.
 async fn blocking<T: Send + 'static>(
     job: impl FnOnce() -> Result<T, String> + Send + 'static,
 ) -> Result<T, String> {
     tauri::async_runtime::spawn_blocking(job)
         .await
         .map_err(|e| e.to_string())?
-}
-
-/// Avvia il flusso OAuth2 PKCE (apre il browser, attende il callback).
-#[tauri::command]
-async fn gcal_connect(app: AppHandle) -> Result<(), String> {
-    blocking(move || {
-        let state = app.state::<GcalState>();
-        gcal::connect(&state)?;
-        let _ = gcal::sync(&app);
-        let _ = app.emit("gcal-status-changed", state.status());
-        Ok(())
-    })
-    .await
-}
-
-#[tauri::command]
-fn gcal_disconnect(app: AppHandle) -> Result<(), String> {
-    let state = app.state::<GcalState>();
-    state.disconnect();
-    let _ = app.emit("gcal-status-changed", state.status());
-    Ok(())
-}
-
-#[tauri::command]
-async fn gcal_list_calendars(app: AppHandle) -> Result<Vec<GcalCalendar>, String> {
-    blocking(move || gcal::list_calendars(&app.state::<GcalState>())).await
-}
-
-/// Forza una sync immediata (es. dopo aver cambiato i calendari selezionati).
-#[tauri::command]
-async fn gcal_sync_now(app: AppHandle) -> Result<usize, String> {
-    blocking(move || {
-        let n = gcal::sync(&app)?;
-        let _ = app.emit("gcal-status-changed", app.state::<GcalState>().status());
-        Ok(n)
-    })
-    .await
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -758,12 +711,7 @@ pub fn run() {
             set_autostart,
             open_data_folder,
             delete_notes,
-            show_all_notes,
-            gcal_status,
-            gcal_connect,
-            gcal_disconnect,
-            gcal_list_calendars,
-            gcal_sync_now
+            show_all_notes
         ])
         .on_window_event(|window, event| {
             // Chiudere "Tutte le note" la nasconde soltanto: riaprirla è istantaneo.
@@ -791,11 +739,6 @@ pub fn run() {
             app.manage(scheduler);
             app.manage(timer::setup(app.handle()));
             backup::start(app.handle());
-
-            // Google Calendar: carica il token salvato e avvia il syncer.
-            app.manage(GcalState::new(data_dir.join("gcal_token.json")));
-            let gcal_syncer = gcal::start_syncer(app.handle());
-            app.manage(gcal_syncer);
 
             let window = app
                 .get_webview_window("main")

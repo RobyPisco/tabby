@@ -17,16 +17,6 @@ export type Settings = {
   theme: "auto" | "light" | "dark";
   /** Trasparenza del vetro delle schede nel deck, 0-100. */
   deck_transparency: number;
-  /** Integrazione Google Calendar attiva. */
-  gcal_enabled: boolean;
-  /** Quanto avanti importare gli eventi: "1w"-"3w" settimane, "1m"-"3m" mesi. */
-  gcal_sync_range: string;
-  /** ID dei calendari selezionati. */
-  gcal_calendar_ids: string[];
-  /** Usa il proxy di Windows (PAC, credenziali dell'utente) per le chiamate a Google. */
-  gcal_use_proxy: boolean;
-  /** Giorni prima dell'inizio in cui un evento compare nel deck (0 = quando inizia, 365 = sempre). */
-  gcal_deck_days: number;
   /** Backup automatico giornaliero. */
   backup_enabled: boolean;
   /** Cartella dei backup; `null` = `backups` nella cartella dei dati. */
@@ -80,11 +70,6 @@ export const settings = $state<Settings>({
   repeat_minutes: 0,
   theme: "auto",
   deck_transparency: 45,
-  gcal_enabled: false,
-  gcal_sync_range: "2w",
-  gcal_calendar_ids: [],
-  gcal_use_proxy: false,
-  gcal_deck_days: 7,
   backup_enabled: true,
   backup_dir: null,
   backup_keep: 7,

@@ -268,8 +268,6 @@ mod tests {
             repeat: None,
             pinned: false,
             folder_id: None,
-            gcal_event_id: None,
-            event_at: None,
             locked: false,
             forgotten_notified: false,
         }

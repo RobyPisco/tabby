@@ -14,13 +14,6 @@ pub const SOUNDS: [&str; 9] = [
     "reminder", "default", "im", "mail", "sms", "alarm", "alarm2", "call", "call2",
 ];
 
-/// Intervalli di importazione di Google Calendar: settimane ("2w") o mesi ("3m").
-pub const GCAL_RANGES: [&str; 6] = ["1w", "2w", "3w", "1m", "2m", "3m"];
-
-/// Giorni prima dell'inizio in cui un evento di Google compare nel deck; 0 = quando inizia,
-/// 365 = sempre (l'importazione arriva al massimo a 3 mesi).
-pub const GCAL_DECK_DAYS: [u32; 7] = [0, 1, 3, 7, 14, 30, 365];
-
 const REPEAT_MINUTES_MAX: u32 = 120;
 const NOTE_WIDTH_RANGE: (u32, u32) = (280, 520);
 const EDITOR_SIZE_RANGE: (u32, u32) = (13, 24);
@@ -52,16 +45,6 @@ pub struct Settings {
     pub theme: String,
     /// Trasparenza del vetro delle schede nel deck, da 0 (opaco) a 100.
     pub deck_transparency: u32,
-    /// Integrazione Google Calendar attiva.
-    pub gcal_enabled: bool,
-    /// Quanto avanti importare gli eventi: una delle chiavi di `GCAL_RANGES`.
-    pub gcal_sync_range: String,
-    /// ID dei calendari Google selezionati dall'utente.
-    pub gcal_calendar_ids: Vec<String>,
-    /// Usa il proxy di Windows (PAC, credenziali dell'utente) per le chiamate a Google.
-    pub gcal_use_proxy: bool,
-    /// Quanti giorni prima dell'inizio un evento compare nel deck: uno dei `GCAL_DECK_DAYS`.
-    pub gcal_deck_days: u32,
     /// Backup automatico giornaliero di note e immagini.
     pub backup_enabled: bool,
     /// Cartella dei backup; `None` = `backups` nella cartella dei dati.
@@ -106,11 +89,6 @@ impl Default for Settings {
             repeat_minutes: 0,
             theme: "auto".into(),
             deck_transparency: 45,
-            gcal_enabled: false,
-            gcal_sync_range: "2w".into(),
-            gcal_calendar_ids: vec![],
-            gcal_use_proxy: false,
-            gcal_deck_days: crate::db::DECK_GCAL_DAYS,
             backup_enabled: true,
             backup_dir: None,
             backup_keep: 7,
@@ -167,15 +145,6 @@ impl Settings {
             repeat_minutes: self.repeat_minutes.min(REPEAT_MINUTES_MAX),
             theme: one_of(self.theme, &["auto", "light", "dark"], &default.theme),
             deck_transparency: self.deck_transparency.min(DECK_TRANSPARENCY_MAX),
-            gcal_enabled: self.gcal_enabled,
-            gcal_sync_range: one_of(self.gcal_sync_range, &GCAL_RANGES, &default.gcal_sync_range),
-            gcal_calendar_ids: self.gcal_calendar_ids,
-            gcal_use_proxy: self.gcal_use_proxy,
-            gcal_deck_days: if GCAL_DECK_DAYS.contains(&self.gcal_deck_days) {
-                self.gcal_deck_days
-            } else {
-                default.gcal_deck_days
-            },
             backup_enabled: self.backup_enabled,
             backup_dir: self.backup_dir.filter(|d| !d.trim().is_empty()),
             backup_keep: self.backup_keep.clamp(BACKUP_KEEP_RANGE.0, BACKUP_KEEP_RANGE.1),
@@ -275,7 +244,6 @@ impl SettingsState {
             .and_then(|text| parse(&text))
             .unwrap_or_default()
             .sanitized();
-        crate::http::set_use_proxy(value.gcal_use_proxy);
         SettingsState {
             path,
             value: Mutex::new(value),
@@ -291,7 +259,6 @@ impl SettingsState {
         let text = serde_json::to_string_pretty(&settings).map_err(|e| e.to_string())?;
         std::fs::write(&self.path, text).map_err(|e| e.to_string())?;
         *self.value.lock().unwrap() = settings.clone();
-        crate::http::set_use_proxy(settings.gcal_use_proxy);
         Ok(settings)
     }
 
@@ -324,21 +291,9 @@ impl SettingsState {
     }
 }
 
-/// Legge `settings.json`. Chi aveva già usato Google Calendar prima che esistesse l'opzione
-/// del proxy (quando il proxy di Windows era sempre attivo) lo ritrova acceso.
+/// Legge `settings.json`. Le vecchie chiavi di Google Calendar (`gcal_*`) vengono ignorate.
 fn parse(text: &str) -> Option<Settings> {
-    let mut json: serde_json::Value = serde_json::from_str(text).ok()?;
-    let obj = json.as_object_mut()?;
-    if obj.contains_key("gcal_enabled") && !obj.contains_key("gcal_use_proxy") {
-        obj.insert("gcal_use_proxy".into(), true.into());
-    }
-    // Fino alla 1.3 l'intervallo era un numero di settimane (1 o 2).
-    if let Some(weeks) = obj.get("gcal_sync_weeks").and_then(|w| w.as_u64()) {
-        if !obj.contains_key("gcal_sync_range") {
-            obj.insert("gcal_sync_range".into(), format!("{weeks}w").into());
-        }
-    }
-    serde_json::from_value(json).ok()
+    serde_json::from_str(text).ok()
 }
 
 #[cfg(test)]
@@ -412,13 +367,9 @@ mod tests {
     }
 
     #[test]
-    fn proxy_default_depends_on_previous_calendar_use() {
-        // Installazione nuova o aggiornamento da una versione senza Calendar: spento.
-        assert!(!parse(r#"{ "side": "left" }"#).unwrap().gcal_use_proxy);
-        // Aveva già usato Calendar quando il proxy era sempre attivo: resta acceso.
-        assert!(parse(r#"{ "gcal_enabled": true }"#).unwrap().gcal_use_proxy);
-        // Scelta esplicita dell'utente: si rispetta.
-        assert!(!parse(r#"{ "gcal_enabled": true, "gcal_use_proxy": false }"#).unwrap().gcal_use_proxy);
+    fn old_google_calendar_keys_are_ignored() {
+        let s = parse(r#"{ "side": "left", "gcal_enabled": true, "gcal_calendar_ids": ["x"] }"#).unwrap();
+        assert_eq!(s.side, "left");
     }
 
     #[test]
@@ -482,13 +433,5 @@ mod tests {
         s.mark_update_notified("1.4.4");
         assert!(s.update_already_notified("1.4.4"));
         assert!(!s.update_already_notified("1.4.5"));
-    }
-
-    #[test]
-    fn old_week_count_becomes_range() {
-        assert_eq!(parse(r#"{ "gcal_sync_weeks": 1 }"#).unwrap().gcal_sync_range, "1w");
-        assert_eq!(parse("{}").unwrap().gcal_sync_range, "2w");
-        let s = Settings { gcal_sync_range: "6m".into(), ..Settings::default() }.sanitized();
-        assert_eq!(s.gcal_sync_range, "2w");
     }
 }

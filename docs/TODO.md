@@ -92,7 +92,7 @@ Dettagli di progetto e motivazioni in [`PIANO.md`](PIANO.md).
 - [ ] Dettatura vocale (`Win+H`) o trascrizione locale con Whisper.
 - [ ] Riassunto o riscrittura di una nota con Claude (chiave API).
 
-## 9. Google Calendar
+## 9. Google Calendar (tolto nella versione per il Microsoft Store, vedi docs/SYNC-E-STORE.md)
 - [x] Integrazione Google Calendar → note in sola lettura con promemoria.
   - Flusso OAuth2 PKCE: apre il browser, cattura il callback su `127.0.0.1`.
   - Il token è salvato in `%APPDATA%\it.pisco.tabby\gcal_token.json`.

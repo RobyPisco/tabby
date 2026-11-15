@@ -1,5 +1,5 @@
 <script module lang="ts">
-  let lastTab: "general" | "notes" | "reminders" | "gcal" | "backup" | "about" = "general";
+  let lastTab: "general" | "notes" | "reminders" | "backup" | "about" = "general";
 </script>
 
 <script lang="ts">
@@ -16,8 +16,6 @@
   let { onclose }: { onclose: () => void } = $props();
 
   type MonitorInfo = { name: string; label: string };
-  type GcalCalendar = { id: string; summary: string; color: string };
-  type GcalStatus = { connected: boolean; last_sync: number | null; last_error: string | null };
 
   let monitors = $state<MonitorInfo[]>([]);
   let autostart = $state(false);
@@ -26,12 +24,6 @@
   let update_ = $state<Release | null>(null);
   let updateStatus = $state<"" | "checking" | "latest" | "failed">("");
   let dialog = $state<HTMLElement>();
-  // Google Calendar
-  let gcalStatus = $state<GcalStatus>({ connected: false, last_sync: null, last_error: null });
-  let gcalCalendars = $state<GcalCalendar[]>([]);
-  let gcalConnecting = $state(false);
-  let gcalSyncing = $state(false);
-  let gcalSyncResult = $state<string>("");
   // Non disturbare: fine del silenzio in corso (manuale o fascia oraria).
   let quietUntil = $state<number | null>(null);
   // Backup
@@ -49,31 +41,11 @@
   let newPinConfirm = $state("");
   let confirmResetPin = $state(false);
 
-  const GCAL_RANGES: [string, string][] = [
-    ["1w", "1 settimana"],
-    ["2w", "2 settimane"],
-    ["3w", "3 settimane"],
-    ["1m", "1 mese"],
-    ["2m", "2 mesi"],
-    ["3m", "3 mesi"],
-  ];
-
-  const GCAL_DECK_DAYS: [number, string][] = [
-    [0, "Solo quando iniziano"],
-    [1, "Dal giorno prima"],
-    [3, "3 giorni prima"],
-    [7, "7 giorni prima"],
-    [14, "14 giorni prima"],
-    [30, "30 giorni prima"],
-    [365, "Sempre, tutti quelli importati"],
-  ];
-
-  type Tab = "general" | "notes" | "reminders" | "gcal" | "backup" | "about";
+  type Tab = "general" | "notes" | "reminders" | "backup" | "about";
   const TABS: { id: Tab; icon: string; label: string; intro: string }[] = [
     { id: "general", icon: "⚙️", label: "Generale", intro: "Avvio, tema e posizione del deck." },
     { id: "notes", icon: "📝", label: "Note", intro: "Come appaiono le note." },
     { id: "reminders", icon: "🔔", label: "Promemoria", intro: "Notifiche, suoni e momenti di silenzio." },
-    { id: "gcal", icon: "📅", label: "Google Calendar", intro: "Gli eventi del tuo calendario come note con promemoria." },
     { id: "backup", icon: "💾", label: "Backup e dati", intro: "Copie di sicurezza delle note e dove sono salvate." },
     { id: "about", icon: "ℹ️", label: "Informazioni", intro: "Versione, aggiornamenti e scorciatoie." },
   ];
@@ -160,42 +132,6 @@
     } catch (e) {
       error = `Avvio automatico: ${e}`;
       autostart = await invoke<boolean>("get_autostart");
-    }
-  }
-
-  async function gcalConnect() {
-    gcalConnecting = true;
-    error = "";
-    try {
-      await invoke("gcal_connect");
-      gcalCalendars = await invoke<GcalCalendar[]>("gcal_list_calendars");
-    } catch (e) {
-      error = `Google Calendar: ${e}`;
-    } finally {
-      gcalConnecting = false;
-    }
-  }
-
-  async function gcalDisconnect() {
-    try {
-      await invoke("gcal_disconnect");
-      gcalCalendars = [];
-      await saveSettings({ gcal_enabled: false, gcal_calendar_ids: [] });
-    } catch (e) {
-      error = `Google Calendar: ${e}`;
-    }
-  }
-
-  async function gcalSyncNow() {
-    gcalSyncing = true;
-    gcalSyncResult = "";
-    try {
-      const n = await invoke<number>("gcal_sync_now");
-      gcalSyncResult = `${n} event${n === 1 ? "o" : "i"} importat${n === 1 ? "o" : "i"}`;
-    } catch (e) {
-      error = `Sync: ${e}`;
-    } finally {
-      gcalSyncing = false;
     }
   }
 
@@ -291,13 +227,6 @@
     }
   }
 
-  function toggleCalendar(id: string) {
-    const ids = settings.gcal_calendar_ids.includes(id)
-      ? settings.gcal_calendar_ids.filter((c) => c !== id)
-      : [...settings.gcal_calendar_ids, id];
-    update({ gcal_calendar_ids: ids });
-  }
-
   onMount(() => {
     getVersion()
       .then((v) => {
@@ -308,23 +237,11 @@
     invoke<MonitorInfo[]>("list_monitors").then((list) => (monitors = list));
     invoke<boolean>("get_autostart").then((value) => (autostart = value));
     loadBackups();
-    invoke<GcalStatus>("gcal_status").then((s) => {
-      gcalStatus = s;
-      if (s.connected) {
-        invoke<GcalCalendar[]>("gcal_list_calendars")
-          .then((cals) => (gcalCalendars = cals))
-          .catch(() => {});
-      }
-    });
     dialog?.focus();
     // Cambiato dal menu della tray mentre il pannello è aperto.
     const unlisten = listen("autostart-changed", async () => (autostart = await invoke<boolean>("get_autostart")));
-    const unlistenGcal = listen<GcalStatus>("gcal-status-changed", ({ payload }) => {
-      gcalStatus = payload;
-    });
     return () => {
       unlisten.then((fn) => fn());
-      unlistenGcal.then((fn) => fn());
     };
   });
 </script>
@@ -351,7 +268,6 @@
           <span class="tab-icon" aria-hidden="true">{t.icon}</span>
           {t.label}
           {#if t.id === "reminders" && quietUntil}<span class="tab-dot" title="Notifiche in pausa"></span>{/if}
-          {#if t.id === "gcal" && gcalStatus.last_error}<span class="tab-dot warn" title="Errore di sincronizzazione"></span>{/if}
           {#if t.id === "about" && update_}<span class="tab-dot" title="Aggiornamento disponibile"></span>{/if}
         </button>
       {/each}
@@ -653,106 +569,6 @@
             </div>
           {/if}
         </div>
-      {:else if tab === "gcal"}
-        <h4>Account</h4>
-        <div class="group">
-          {#if !gcalStatus.connected}
-            <div class="row">
-              <span>
-                Non collegato
-                <small class="desc">Collega il tuo account per importare gli eventi come note con promemoria. Tabby li legge soltanto, non li modifica.</small>
-              </span>
-              <button class="plain primary" disabled={gcalConnecting} onclick={gcalConnect}>
-                {gcalConnecting ? "Attendere…" : "Collega Google"}
-              </button>
-            </div>
-          {:else}
-            <div class="row">
-              <span>
-                <strong>✓ Collegato</strong>
-                <small class="desc">
-                  {gcalStatus.last_sync ? `Ultima sincronizzazione alle ${clock(gcalStatus.last_sync)}` : "Non ancora sincronizzato"}
-                  · ogni 15 minuti
-                </small>
-                {#if gcalStatus.last_error}<small class="desc warn">⚠ {gcalStatus.last_error}</small>{/if}
-              </span>
-              <div class="buttons">
-                <button
-                  class="plain"
-                  disabled={gcalSyncing || !settings.gcal_enabled || settings.gcal_calendar_ids.length === 0}
-                  onclick={gcalSyncNow}
-                >
-                  {gcalSyncing ? "Sync…" : "↻ Sincronizza ora"}
-                </button>
-                <button class="plain danger" onclick={gcalDisconnect}>Scollega</button>
-              </div>
-            </div>
-            {#if gcalSyncResult}<p class="desc pad">{gcalSyncResult}</p>{/if}
-          {/if}
-        </div>
-
-        {#if gcalStatus.connected}
-          <h4>Importazione</h4>
-          <div class="group">
-            <label class="row check">
-              <span>Importa gli eventi</span>
-              <input type="checkbox" checked={settings.gcal_enabled} onchange={(e) => update({ gcal_enabled: e.currentTarget.checked })} />
-            </label>
-            {#if settings.gcal_enabled}
-              <label class="row">
-                <span>
-                  Quanto avanti
-                  <small class="desc">Gli eventi in questo periodo diventano note nella cartella «Calendario Google».</small>
-                </span>
-                <select value={settings.gcal_sync_range} onchange={(e) => update({ gcal_sync_range: e.currentTarget.value })}>
-                  {#each GCAL_RANGES as [key, label] (key)}
-                    <option value={key}>{label}</option>
-                  {/each}
-                </select>
-              </label>
-              <label class="row">
-                <span>
-                  Mostra nel deck
-                  <small class="desc">Gli altri eventi restano in «Tutte le note» e compaiono nel deck quando si avvicinano.</small>
-                </span>
-                <select value={settings.gcal_deck_days} onchange={(e) => update({ gcal_deck_days: Number(e.currentTarget.value) })}>
-                  {#each GCAL_DECK_DAYS as [days, label] (days)}
-                    <option value={days}>{label}</option>
-                  {/each}
-                </select>
-              </label>
-            {/if}
-          </div>
-
-          {#if settings.gcal_enabled && gcalCalendars.length > 0}
-            <h4>Calendari da importare</h4>
-            <div class="group cals">
-              {#each gcalCalendars as cal (cal.id)}
-                <label class="cal-row">
-                  <input type="checkbox" checked={settings.gcal_calendar_ids.includes(cal.id)} onchange={() => toggleCalendar(cal.id)} />
-                  <span class="cal-dot" style:background={cal.color}></span>
-                  <span>{cal.summary}</span>
-                </label>
-              {/each}
-              {#if settings.gcal_calendar_ids.length === 0}
-                <small class="desc warn">Scegli almeno un calendario.</small>
-              {/if}
-            </div>
-          {/if}
-        {/if}
-
-        <details class="advanced">
-          <summary>Rete aziendale</summary>
-          <div class="group">
-            <label class="row check">
-              <span>
-                Usa il proxy di Windows
-                <small class="desc">Solo se in ufficio la connessione a Google non funziona: Tabby usa le impostazioni proxy di Windows e le tue credenziali.</small>
-              </span>
-              <input type="checkbox" checked={settings.gcal_use_proxy} onchange={(e) => update({ gcal_use_proxy: e.currentTarget.checked })} />
-            </label>
-          </div>
-        </details>
       {:else if tab === "backup"}
         <h4>Backup automatico</h4>
         <div class="group">
@@ -949,9 +765,6 @@
     border-radius: 50%;
     background: var(--focus);
   }
-  .tab-dot.warn {
-    background: var(--danger, #e55);
-  }
 
   /* Contenuto della sezione */
   .content {
@@ -1046,9 +859,6 @@
     font-size: 12px;
     line-height: 1.4;
   }
-  .desc.warn {
-    color: var(--danger, #e55);
-  }
   .desc.pad {
     margin: 0;
     padding: 8px 0;
@@ -1118,14 +928,6 @@
     justify-content: space-between;
     gap: 12px;
     padding: 4px 0;
-  }
-  .advanced {
-    margin-top: 18px;
-  }
-  .advanced summary {
-    color: var(--muted);
-    font-size: 12px;
-    cursor: pointer;
   }
   .plain {
     padding: 5px 12px;
@@ -1203,23 +1005,6 @@
     box-shadow:
       0 0 0 2px var(--pane),
       0 0 0 4px var(--ring);
-  }
-  .cals {
-    padding-top: 6px;
-    padding-bottom: 6px;
-  }
-  .cal-row {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 5px 0;
-    cursor: pointer;
-  }
-  .cal-dot {
-    flex: none;
-    width: 12px;
-    height: 12px;
-    border-radius: 50%;
   }
   dl {
     display: grid;
