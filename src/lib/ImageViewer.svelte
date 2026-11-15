@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { tr } from "$lib/i18n";
   import { onMount } from "svelte";
 
   let { src, alt = "", onclose }: { src: string; alt?: string; onclose: () => void } = $props();
@@ -33,11 +34,11 @@
 <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
 <div class="viewer" onclick={onclose} {onwheel}>
   <div class="bar" onclick={(e) => e.stopPropagation()}>
-    <button onclick={() => setZoom(zoom / 1.4)} aria-label="Riduci" title="Riduci">−</button>
+    <button onclick={() => setZoom(zoom / 1.4)} aria-label={tr("Riduci", "Zoom out")} title={tr("Riduci", "Zoom out")}>−</button>
     <span>{Math.round(zoom * 100)}%</span>
-    <button onclick={() => setZoom(zoom * 1.4)} aria-label="Ingrandisci" title="Ingrandisci">+</button>
-    <button onclick={() => setZoom(1)} title="Adatta alla finestra">Adatta</button>
-    <button onclick={onclose} aria-label="Chiudi" title="Chiudi (Esc)">✕</button>
+    <button onclick={() => setZoom(zoom * 1.4)} aria-label={tr("Ingrandisci", "Zoom in")} title={tr("Ingrandisci", "Zoom in")}>+</button>
+    <button onclick={() => setZoom(1)} title={tr("Adatta alla finestra", "Fit to window")}>{tr("Adatta", "Fit")}</button>
+    <button onclick={onclose} aria-label={tr("Chiudi", "Close")} title={tr("Chiudi (Esc)", "Close (Esc)")}>✕</button>
   </div>
   <div class="stage" style:--zoom={zoom}>
     <!-- svelte-ignore a11y_no_noninteractive_element_interactions, a11y_click_events_have_key_events -->

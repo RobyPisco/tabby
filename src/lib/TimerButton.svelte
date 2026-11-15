@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { tr } from "$lib/i18n";
   import { invoke } from "@tauri-apps/api/core";
   import { formatLeft, timer, type Timer } from "$lib/timer.svelte";
 
@@ -45,7 +46,7 @@
     aria-haspopup="dialog"
     aria-expanded={open}
     aria-label="Timer"
-    title={mine ? `${mine.kind === "focus" ? "Concentrazione" : "Pausa"}: mancano ${formatLeft(mine.left)}` : "Timer / pomodoro"}
+    title={mine ? `${mine.kind === "focus" ? tr("Concentrazione", "Focus") : tr("Pausa", "Break")}: ${tr("mancano", "left")} ${formatLeft(mine.left)}` : "Timer / pomodoro"}
   >
     <svg viewBox="0 0 20 20" aria-hidden="true">
       <circle cx="10" cy="11" r="6.5" />
@@ -59,32 +60,32 @@
     <div class="panel" role="dialog" aria-label="Timer" tabindex="-1" onkeydown={onKeydown}>
       {#if mine}
         <p class="big">{formatLeft(mine.left)}</p>
-        <p class="sub">{mine.kind === "focus" ? "🍅 Concentrazione" : "☕ Pausa"} · {mine.minutes} min</p>
+        <p class="sub">{mine.kind === "focus" ? tr("🍅 Concentrazione", "🍅 Focus") : tr("☕ Pausa", "☕ Break")} · {mine.minutes} min</p>
         <div class="row">
           <button onclick={() => invoke("timer_extend", { noteId, minutes: 5 })}>+5 min</button>
-          <button class="stop" onclick={() => { open = false; invoke("timer_stop", { noteId }); }}>Ferma</button>
+          <button class="stop" onclick={() => { open = false; invoke("timer_stop", { noteId }); }}>{tr("Ferma", "Stop")}</button>
         </div>
       {:else}
-        <span class="label">🍅 Concentrazione</span>
+        <span class="label">{tr("🍅 Concentrazione", "🍅 Focus")}</span>
         <div class="row">
           {#each FOCUS as m (m)}
             <button onclick={() => start(m, "focus")}>{m} min</button>
           {/each}
         </div>
-        <span class="label">☕ Pausa</span>
+        <span class="label">{tr("☕ Pausa", "☕ Break")}</span>
         <div class="row">
           {#each BREAKS as m (m)}
             <button onclick={() => start(m, "break")}>{m} min</button>
           {/each}
         </div>
-        <span class="label">A scelta</span>
+        <span class="label">{tr("A scelta", "Custom")}</span>
         <form class="row" onsubmit={(e) => { e.preventDefault(); start(custom, "focus"); }}>
-          <input type="number" min="1" max="480" bind:value={custom} aria-label="Minuti" />
+          <input type="number" min="1" max="480" bind:value={custom} aria-label={tr("Minuti", "Minutes")} />
           <span class="unit">min</span>
-          <button class="primary" type="submit">Avvia</button>
+          <button class="primary" type="submit">{tr("Avvia", "Start")}</button>
         </form>
       {/if}
-      <p class="hint">Alla fine arriva una notifica, anche in "Non disturbare".</p>
+      <p class="hint">{tr("Alla fine arriva una notifica, anche in \"Non disturbare\".", "A notification arrives at the end, even in \"Do not disturb\".")}</p>
     </div>
   {/if}
 </div>

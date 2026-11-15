@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { locale, tr } from "$lib/i18n";
   import { invoke } from "@tauri-apps/api/core";
   import NoteEditor from "$lib/NoteEditor.svelte";
   import { fullDate, relativeTime, type Version } from "$lib/notes";
@@ -11,7 +12,7 @@
   }: { noteId: number; color: string; onclose: () => void; onrestored: () => void } = $props();
 
   function shortDate(unixSeconds: number): string {
-    return new Date(unixSeconds * 1000).toLocaleString("it-IT", {
+    return new Date(unixSeconds * 1000).toLocaleString(locale(), {
       day: "numeric",
       month: "short",
       hour: "2-digit",
@@ -44,7 +45,7 @@
 <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
 <section
   class="panel"
-  aria-label="Cronologia della nota"
+  aria-label={tr("Cronologia della nota", "Note history")}
   onkeydown={(e) => {
     if (e.key === "Escape") {
       e.stopPropagation();
@@ -53,16 +54,15 @@
   }}
 >
   <header>
-    <h2>Cronologia</h2>
-    <button class="close" onclick={onclose} aria-label="Chiudi la cronologia">✕</button>
+    <h2>{tr("Cronologia", "History")}</h2>
+    <button class="close" onclick={onclose} aria-label={tr("Chiudi la cronologia", "Close history")}>✕</button>
   </header>
 
   {#if !loaded}
-    <p class="hint">Caricamento…</p>
+    <p class="hint">{tr("Caricamento…", "Loading…")}</p>
   {:else if versions.length === 0}
     <p class="hint">
-      Ancora nessuna versione precedente. Le versioni si salvano da sole mentre modifichi la nota,
-      al massimo una ogni 10 minuti.
+      {tr("Ancora nessuna versione precedente. Le versioni si salvano da sole mentre modifichi la nota, al massimo una ogni 10 minuti.", "No earlier versions yet. Versions are saved automatically while you edit the note, at most one every 10 minutes.")}
     </p>
   {:else}
     <ul>
@@ -77,13 +77,13 @@
     </ul>
     {#if chosen}
       <div class="preview" style:background={color}>
-        <strong>{chosen.title || "Senza titolo"}</strong>
+        <strong>{chosen.title || tr("Senza titolo", "Untitled")}</strong>
         {#key chosen.id}
-          <NoteEditor value={chosen.body} onchange={() => {}} readonly placeholder="(vuota)" />
+          <NoteEditor value={chosen.body} onchange={() => {}} readonly placeholder={tr("(vuota)", "(empty)")} />
         {/key}
       </div>
-      <button class="restore" onclick={restore}>Ripristina questa versione</button>
-      <p class="hint small">Il testo attuale non si perde: diventa a sua volta una versione.</p>
+      <button class="restore" onclick={restore}>{tr("Ripristina questa versione", "Restore this version")}</button>
+      <p class="hint small">{tr("Il testo attuale non si perde: diventa a sua volta una versione.", "The current text is not lost: it becomes a version too.")}</p>
     {/if}
   {/if}
 </section>

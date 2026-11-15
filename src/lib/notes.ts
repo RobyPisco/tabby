@@ -1,5 +1,6 @@
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import { locale, tr } from "$lib/i18n";
 
 export type Note = {
   id: number;
@@ -29,11 +30,12 @@ export type Version = { id: number; title: string; body: string; saved_at: numbe
 export type Repeat = "none" | "daily" | "weekly" | "monthly";
 export type ReminderAction = "snooze10" | "snooze60" | "tomorrow" | "done";
 
+/** Etichette delle ricorrenze (getter: seguono la lingua scelta). */
 export const REPEAT_LABELS: Record<Repeat, string> = {
-  none: "Una volta",
-  daily: "Ogni giorno",
-  weekly: "Ogni settimana",
-  monthly: "Ogni mese",
+  get none() { return tr("Una volta", "Once"); },
+  get daily() { return tr("Ogni giorno", "Every day"); },
+  get weekly() { return tr("Ogni settimana", "Every week"); },
+  get monthly() { return tr("Ogni mese", "Every month"); },
 };
 
 export type Filter = "all" | "active" | "archived" | "trash";
@@ -43,18 +45,18 @@ export const COLORS = [
   "#a8e4e0", "#d4ec9e", "#f9cc8f", "#f5a9a3", "#e6d5bd", "#d5d9e0",
 ];
 export const COLOR_NAMES: Record<string, string> = {
-  "#b5d3f7": "Azzurro",
-  "#b3e5cf": "Verde",
-  "#d4c8f2": "Lilla",
-  "#f7dc82": "Giallo",
-  "#f7c4b5": "Pesca",
-  "#f2b8d4": "Rosa",
-  "#a8e4e0": "Acqua",
-  "#d4ec9e": "Lime",
-  "#f9cc8f": "Arancio",
-  "#f5a9a3": "Corallo",
-  "#e6d5bd": "Sabbia",
-  "#d5d9e0": "Grigio",
+  get "#b5d3f7"() { return tr("Azzurro", "Blue"); },
+  get "#b3e5cf"() { return tr("Verde", "Green"); },
+  get "#d4c8f2"() { return tr("Lilla", "Lilac"); },
+  get "#f7dc82"() { return tr("Giallo", "Yellow"); },
+  get "#f7c4b5"() { return tr("Pesca", "Peach"); },
+  get "#f2b8d4"() { return tr("Rosa", "Pink"); },
+  get "#a8e4e0"() { return tr("Acqua", "Aqua"); },
+  get "#d4ec9e"() { return tr("Lime", "Lime"); },
+  get "#f9cc8f"() { return tr("Arancio", "Orange"); },
+  get "#f5a9a3"() { return tr("Corallo", "Coral"); },
+  get "#e6d5bd"() { return tr("Sabbia", "Sand"); },
+  get "#d5d9e0"() { return tr("Grigio", "Grey"); },
 };
 
 /** Versione satura e più scura del colore pastello della nota (pillola, barre colorate). */
@@ -73,15 +75,15 @@ export function onNotesChangedElsewhere(reload: () => void): Promise<() => void>
 /** Tempo trascorso in forma breve: "ora", "23m", "15h", "3g", poi la data. */
 export function relativeTime(unixSeconds: number, nowSeconds = Date.now() / 1000): string {
   const diff = Math.max(0, nowSeconds - unixSeconds);
-  if (diff < 60) return "ora";
+  if (diff < 60) return tr("ora", "now");
   if (diff < 3600) return `${Math.floor(diff / 60)}m`;
   if (diff < 86400) return `${Math.floor(diff / 3600)}h`;
-  if (diff < 7 * 86400) return `${Math.floor(diff / 86400)}g`;
-  return new Date(unixSeconds * 1000).toLocaleDateString("it-IT", { day: "numeric", month: "short" });
+  if (diff < 7 * 86400) return `${Math.floor(diff / 86400)}${tr("g", "d")}`;
+  return new Date(unixSeconds * 1000).toLocaleDateString(locale(), { day: "numeric", month: "short" });
 }
 
 export function fullDate(unixSeconds: number): string {
-  return new Date(unixSeconds * 1000).toLocaleString("it-IT", {
+  return new Date(unixSeconds * 1000).toLocaleString(locale(), {
     day: "numeric",
     month: "long",
     year: "numeric",
@@ -97,14 +99,14 @@ function startOfDay(date: Date): number {
 /** Scadenza in forma breve: "oggi 18:00", "domani 09:00", "lun 09:00", "6 ott 09:00". */
 export function formatReminder(unixSeconds: number): string {
   const date = new Date(unixSeconds * 1000);
-  const time = date.toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" });
+  const time = date.toLocaleTimeString(locale(), { hour: "2-digit", minute: "2-digit" });
   const days = Math.round((startOfDay(date) - startOfDay(new Date())) / 86_400_000);
-  if (days === 0) return `oggi ${time}`;
-  if (days === 1) return `domani ${time}`;
-  if (days === -1) return `ieri ${time}`;
-  if (days > 1 && days < 7) return `${date.toLocaleDateString("it-IT", { weekday: "short" })} ${time}`;
+  if (days === 0) return `${tr("oggi", "today")} ${time}`;
+  if (days === 1) return `${tr("domani", "tomorrow")} ${time}`;
+  if (days === -1) return `${tr("ieri", "yesterday")} ${time}`;
+  if (days > 1 && days < 7) return `${date.toLocaleDateString(locale(), { weekday: "short" })} ${time}`;
   const sameYear = date.getFullYear() === new Date().getFullYear();
-  const day = date.toLocaleDateString("it-IT", {
+  const day = date.toLocaleDateString(locale(), {
     day: "numeric",
     month: "short",
     year: sameYear ? undefined : "numeric",
@@ -119,16 +121,21 @@ export function isOverdue(note: Note, nowSeconds: number): boolean {
 export type Template = { label: string; title: string; body: string };
 
 /** Modelli rapidi proposti quando una nota è vuota. */
-export const TEMPLATES: Template[] = [
-  { label: "Lista spesa", title: "Spesa", body: "- [ ] " },
-  { label: "Da fare", title: "Da fare", body: "- [ ] " },
-  {
-    label: "Riunione",
-    title: "Riunione",
-    body: "## Partecipanti\n- \n\n## Punti\n- \n\n## Azioni\n- [ ] ",
-  },
-  { label: "Scaletta", title: "Scaletta", body: "1. \n2. \n3. " },
-];
+export function templates(): Template[] {
+  return [
+    { label: tr("Lista spesa", "Shopping list"), title: tr("Spesa", "Shopping"), body: "- [ ] " },
+    { label: tr("Da fare", "To do"), title: tr("Da fare", "To do"), body: "- [ ] " },
+    {
+      label: tr("Riunione", "Meeting"),
+      title: tr("Riunione", "Meeting"),
+      body: tr(
+        "## Partecipanti\n- \n\n## Punti\n- \n\n## Azioni\n- [ ] ",
+        "## Attendees\n- \n\n## Topics\n- \n\n## Actions\n- [ ] ",
+      ),
+    },
+    { label: tr("Scaletta", "Outline"), title: tr("Scaletta", "Outline"), body: "1. \n2. \n3. " },
+  ];
+}
 
 /** Caselle spuntate e totali, per mostrare "2/5" nell'elenco; `null` se la nota non ne ha. */
 export function checklistProgress(body: string): { done: number; total: number } | null {
@@ -141,12 +148,12 @@ export function checklistProgress(body: string): { done: number; total: number }
 export function previewLine(body: string): string {
   for (const raw of body.split("\n")) {
     const line = raw
-      .replace(/!\[[^\]]*\]\([^)]*\)/g, "🖼 immagine")
+      .replace(/!\[[^\]]*\]\([^)]*\)/g, tr("🖼 immagine", "🖼 image"))
       .replace(/\[\[([^[\]\n]+)\]\]/g, "$1")
       .replace(/^\s*(#{1,6}\s+|[-*+]\s+\[( |x|X)\]\s*|[-*+]\s+|\d+\.\s+|>\s*)/, "")
       .replace(/(\*\*|__|~~|`)/g, "")
       .trim();
     if (line) return line;
   }
-  return "Nessun testo";
+  return tr("Nessun testo", "No text");
 }

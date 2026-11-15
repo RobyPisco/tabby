@@ -3,6 +3,7 @@
 </script>
 
 <script lang="ts">
+  import { locale, plural, tr } from "$lib/i18n";
   import { invoke } from "@tauri-apps/api/core";
   import { getVersion } from "@tauri-apps/api/app";
   import { listen } from "@tauri-apps/api/event";
@@ -82,12 +83,12 @@
 
   type Tab = "general" | "notes" | "reminders" | "sync" | "backup" | "about";
   const TABS: { id: Tab; icon: string; label: string; intro: string }[] = [
-    { id: "general", icon: "⚙️", label: "Generale", intro: "Avvio, tema e posizione del deck." },
-    { id: "notes", icon: "📝", label: "Note", intro: "Come appaiono le note." },
-    { id: "reminders", icon: "🔔", label: "Promemoria", intro: "Notifiche, suoni e momenti di silenzio." },
-    { id: "sync", icon: "🔄", label: "Sincronizzazione", intro: "Le stesse note su tutti i tuoi PC, tramite Google Drive, OneDrive o Dropbox." },
-    { id: "backup", icon: "💾", label: "Backup e dati", intro: "Copie di sicurezza delle note e dove sono salvate." },
-    { id: "about", icon: "ℹ️", label: "Informazioni", intro: "Versione, aggiornamenti e scorciatoie." },
+    { id: "general", icon: "⚙️", get label() { return tr("Generale", "General"); }, get intro() { return tr("Avvio, tema, lingua e posizione del deck.", "Startup, theme, language and deck position."); } },
+    { id: "notes", icon: "📝", get label() { return tr("Note", "Notes"); }, get intro() { return tr("Come appaiono le note.", "How notes look."); } },
+    { id: "reminders", icon: "🔔", get label() { return tr("Promemoria", "Reminders"); }, get intro() { return tr("Notifiche, suoni e momenti di silenzio.", "Notifications, sounds and quiet times."); } },
+    { id: "sync", icon: "🔄", get label() { return tr("Sincronizzazione", "Sync"); }, get intro() { return tr("Le stesse note su tutti i tuoi PC, tramite Google Drive, OneDrive o Dropbox.", "The same notes on all your PCs, through Google Drive, OneDrive or Dropbox."); } },
+    { id: "backup", icon: "💾", get label() { return tr("Backup e dati", "Backup and data"); }, get intro() { return tr("Copie di sicurezza delle note e dove sono salvate.", "Safety copies of your notes and where they are stored."); } },
+    { id: "about", icon: "ℹ️", get label() { return tr("Informazioni", "About"); }, get intro() { return tr("Versione, aggiornamenti e scorciatoie.", "Version, updates and shortcuts."); } },
   ];
   // Riapre il pannello sull'ultima sezione vista.
   let tab = $state<Tab>(lastTab);
@@ -96,27 +97,27 @@
     lastTab = tab;
   });
 
-  const SOUNDS: [string, string][] = [
-    ["reminder", "Promemoria"],
-    ["default", "Classico"],
-    ["im", "Messaggio"],
-    ["mail", "Posta"],
+  const SOUNDS = $derived<[string, string][]>([
+    ["reminder", tr("Promemoria", "Reminder")],
+    ["default", tr("Classico", "Classic")],
+    ["im", tr("Messaggio", "Message")],
+    ["mail", tr("Posta", "Mail")],
     ["sms", "SMS"],
-    ["alarm", "Sveglia"],
-    ["alarm2", "Sveglia 2"],
-    ["call", "Chiamata"],
-    ["call2", "Chiamata 2"],
-  ];
+    ["alarm", tr("Sveglia", "Alarm")],
+    ["alarm2", tr("Sveglia 2", "Alarm 2")],
+    ["call", tr("Chiamata", "Call")],
+    ["call2", tr("Chiamata 2", "Call 2")],
+  ]);
 
-  const SHORTCUTS: [string, string][] = [
-    ["Ctrl+Alt+L", "Tutte le note"],
-    ["Ctrl+Alt+N", "Nuova nota nel deck"],
-    ["Ctrl+Alt+P", "Nuova nota con promemoria"],
-    ["Ctrl+Alt+V", "Salva gli appunti come nota"],
-    ["Ctrl+Alt+H", "Mostra/nascondi il deck"],
-    ["Ctrl+Alt+D", "Non disturbare per un'ora / riattiva le notifiche"],
-    ["Ctrl+Alt+F", "Cerca ovunque: trova una nota e aprila al volo"],
-  ];
+  const SHORTCUTS = $derived<[string, string][]>([
+    ["Ctrl+Alt+L", tr("Tutte le note", "All notes")],
+    ["Ctrl+Alt+N", tr("Nuova nota nel deck", "New note in the deck")],
+    ["Ctrl+Alt+P", tr("Nuova nota con promemoria", "New note with reminder")],
+    ["Ctrl+Alt+V", tr("Salva gli appunti come nota", "Save the clipboard as a note")],
+    ["Ctrl+Alt+H", tr("Mostra/nascondi il deck", "Show/hide the deck")],
+    ["Ctrl+Alt+D", tr("Non disturbare per un'ora / riattiva le notifiche", "Do not disturb for an hour / turn notifications back on")],
+    ["Ctrl+Alt+F", tr("Cerca ovunque: trova una nota e aprila al volo", "Search everywhere: find a note and open it right away")],
+  ]);
 
   async function update(changes: Partial<Settings>) {
     error = "";
@@ -130,7 +131,7 @@
   async function submitChangePin() {
     error = "";
     if (newPin !== newPinConfirm) {
-      error = "I due PIN non coincidono";
+      error = tr("I due PIN non coincidono", "The two PINs don't match");
       return;
     }
     try {
@@ -171,17 +172,17 @@
     try {
       autostart = await invoke<boolean>("set_autostart", { enabled: !autostart });
     } catch (e) {
-      error = `Avvio automatico: ${e}`;
+      error = `${tr("Avvio automatico", "Autostart")}: ${e}`;
       autostart = await invoke<boolean>("get_autostart");
     }
   }
 
   function clock(unix: number): string {
-    return new Date(unix * 1000).toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" });
+    return new Date(unix * 1000).toLocaleTimeString(locale(), { hour: "2-digit", minute: "2-digit" });
   }
 
   function backupDate(unix: number): string {
-    return new Date(unix * 1000).toLocaleString("it-IT", {
+    return new Date(unix * 1000).toLocaleString(locale(), {
       weekday: "short",
       day: "numeric",
       month: "short",
@@ -207,7 +208,7 @@
             : Math.floor(Date.now() / 1000) + minutes * 60;
       await invoke("set_dnd", { until });
     } catch (e) {
-      error = `Non disturbare: ${e}`;
+      error = `${tr("Non disturbare", "Do not disturb")}: ${e}`;
     }
   }
 
@@ -226,7 +227,7 @@
     error = "";
     try {
       const info = await invoke<BackupInfo>("backup_now");
-      backupResult = `Fatto: ${info.notes} note salvate`;
+      backupResult = `${tr("Fatto", "Done")}: ${plural(info.notes, ["nota salvata", "note salvate"], ["note saved", "notes saved"])}`;
       await loadBackups();
     } catch (e) {
       error = `Backup: ${e}`;
@@ -236,14 +237,14 @@
   }
 
   async function chooseSyncFolder() {
-    const dir = await openDialog({ directory: true, title: "Cartella condivisa (es. Il mio Drive, OneDrive o Dropbox)" });
+    const dir = await openDialog({ directory: true, title: tr("Cartella condivisa (es. Il mio Drive, OneDrive o Dropbox)", "Shared folder (e.g. My Drive, OneDrive or Dropbox)") });
     if (typeof dir !== "string") return;
     error = "";
     try {
       await invoke<string>("sync_choose_folder", { path: dir });
       syncStatus = await invoke<SyncStatus>("sync_status");
     } catch (e) {
-      error = `Sincronizzazione: ${e}`;
+      error = `${tr("Sincronizzazione", "Sync")}: ${e}`;
     }
   }
 
@@ -256,7 +257,7 @@
     try {
       await invoke("sync_disconnect");
     } catch (e) {
-      error = `Sincronizzazione: ${e}`;
+      error = `${tr("Sincronizzazione", "Sync")}: ${e}`;
     }
   }
 
@@ -273,7 +274,7 @@
       passphraseOpen = false;
       setTimeout(refreshSync, 1500);
     } catch (e) {
-      error = `Frase segreta: ${e}`;
+      error = `${tr("Frase segreta", "Passphrase")}: ${e}`;
     } finally {
       passphraseBusy = false;
     }
@@ -289,7 +290,7 @@
       await invoke("sync_remove_encryption");
       setTimeout(refreshSync, 1500);
     } catch (e) {
-      error = `Cifratura: ${e}`;
+      error = `${tr("Cifratura", "Encryption")}: ${e}`;
     }
   }
 
@@ -298,13 +299,13 @@
       await invoke("sync_set_phone_copy", { enabled });
       syncStatus.phone_copy = enabled;
     } catch (e) {
-      error = `Copie per il telefono: ${e}`;
+      error = `${tr("Copie per il telefono", "Phone copies")}: ${e}`;
     }
   }
 
   async function shareFolder() {
     if (shareFolderId === null) return;
-    const dir = await openDialog({ directory: true, title: "Cartella di Drive (o OneDrive, Dropbox) da condividere con le altre persone" });
+    const dir = await openDialog({ directory: true, title: tr("Cartella di Drive (o OneDrive, Dropbox) da condividere con le altre persone", "Drive (or OneDrive, Dropbox) folder to share with the other people") });
     if (typeof dir !== "string") return;
     error = "";
     try {
@@ -312,19 +313,19 @@
       shareFolderId = null;
       setTimeout(refreshSync, 1500);
     } catch (e) {
-      error = `Lista condivisa: ${e}`;
+      error = `${tr("Lista condivisa", "Shared list")}: ${e}`;
     }
   }
 
   async function joinShare() {
-    const dir = await openDialog({ directory: true, title: "Cartella che ti hanno condiviso" });
+    const dir = await openDialog({ directory: true, title: tr("Cartella che ti hanno condiviso", "Folder that was shared with you") });
     if (typeof dir !== "string") return;
     error = "";
     try {
       await invoke<string>("share_join", { path: dir });
       setTimeout(refreshSync, 1500);
     } catch (e) {
-      error = `Lista condivisa: ${e}`;
+      error = `${tr("Lista condivisa", "Shared list")}: ${e}`;
     }
   }
 
@@ -338,22 +339,22 @@
       await invoke("share_leave", { folderUid: uid });
       setTimeout(refreshSync, 500);
     } catch (e) {
-      error = `Lista condivisa: ${e}`;
+      error = `${tr("Lista condivisa", "Shared list")}: ${e}`;
     }
   }
 
   /** "adesso", "5 min fa", "alle 18:20", "il 14/11". */
   function ago(unix: number): string {
     const secs = Math.floor(Date.now() / 1000) - unix;
-    if (secs < 60) return "adesso";
-    if (secs < 3600) return `${Math.floor(secs / 60)} min fa`;
+    if (secs < 60) return tr("adesso", "just now");
+    if (secs < 3600) return `${Math.floor(secs / 60)} ${tr("min fa", "min ago")}`;
     const d = new Date(unix * 1000);
-    if (d.toDateString() === new Date().toDateString()) return `alle ${clock(unix)}`;
-    return `il ${d.toLocaleDateString("it-IT", { day: "numeric", month: "numeric" })}`;
+    if (d.toDateString() === new Date().toDateString()) return `${tr("alle", "at")} ${clock(unix)}`;
+    return `${tr("il", "on")} ${d.toLocaleDateString(locale(), { day: "numeric", month: "numeric" })}`;
   }
 
   async function chooseBackupFolder() {
-    const dir = await openDialog({ directory: true, title: "Cartella dei backup (es. su D: o in OneDrive)" });
+    const dir = await openDialog({ directory: true, title: tr("Cartella dei backup (es. su D: o in OneDrive)", "Backup folder (e.g. on D: or in OneDrive)") });
     if (typeof dir === "string") {
       await update({ backup_dir: dir });
       await loadBackups();
@@ -376,10 +377,10 @@
     error = "";
     try {
       await invoke("backup_restore", { name });
-      backupResult = "Note ripristinate. Lo stato di prima è in un nuovo backup.";
+      backupResult = tr("Note ripristinate. Lo stato di prima è in un nuovo backup.", "Notes restored. The previous state is in a new backup.");
       await loadBackups();
     } catch (e) {
-      error = `Ripristino: ${e}`;
+      error = `${tr("Ripristino", "Restore")}: ${e}`;
     } finally {
       restoring = false;
     }
@@ -413,7 +414,7 @@
     class="dialog"
     role="dialog"
     aria-modal="true"
-    aria-label="Impostazioni"
+    aria-label={tr("Impostazioni", "Settings")}
     tabindex="-1"
     bind:this={dialog}
     onkeydown={(e) => {
@@ -423,15 +424,15 @@
       }
     }}
   >
-    <nav aria-label="Sezioni delle impostazioni">
-      <h2>Impostazioni</h2>
+    <nav aria-label={tr("Sezioni delle impostazioni", "Settings sections")}>
+      <h2>{tr("Impostazioni", "Settings")}</h2>
       {#each TABS as t (t.id)}
         <button class="tab" class:on={tab === t.id} aria-current={tab === t.id ? "page" : undefined} onclick={() => (tab = t.id)}>
           <span class="tab-icon" aria-hidden="true">{t.icon}</span>
           {t.label}
-          {#if t.id === "reminders" && quietUntil}<span class="tab-dot" title="Notifiche in pausa"></span>{/if}
-          {#if t.id === "sync" && settings.sync_dir && syncStatus.last_error}<span class="tab-dot warn" title="Problema di sincronizzazione"></span>{/if}
-          {#if t.id === "about" && update_}<span class="tab-dot" title="Aggiornamento disponibile"></span>{/if}
+          {#if t.id === "reminders" && quietUntil}<span class="tab-dot" title={tr("Notifiche in pausa", "Notifications paused")}></span>{/if}
+          {#if t.id === "sync" && settings.sync_dir && syncStatus.last_error}<span class="tab-dot warn" title={tr("Problema di sincronizzazione", "Sync problem")}></span>{/if}
+          {#if t.id === "about" && update_}<span class="tab-dot" title={tr("Aggiornamento disponibile", "Update available")}></span>{/if}
         </button>
       {/each}
     </nav>
@@ -442,7 +443,7 @@
           <h3>{current.label}</h3>
           <p class="intro">{current.intro}</p>
         </div>
-        <button class="close" onclick={onclose} aria-label="Chiudi le impostazioni">✕</button>
+        <button class="close" onclick={onclose} aria-label={tr("Chiudi le impostazioni", "Close settings")}>✕</button>
       </header>
 
       {#if error}<p class="error">{error}</p>{/if}
@@ -450,36 +451,47 @@
       {#if tab === "general"}
         <div class="group">
           <label class="row check">
-            <span>Avvia Tabby con Windows</span>
+            <span>{tr("Avvia Tabby con Windows", "Start Tabby with Windows")}</span>
             <input type="checkbox" checked={autostart} onchange={toggleAutostart} />
+          </label>
+          <label class="row">
+            <span>
+              {tr("Lingua", "Language")}
+              <small class="desc">{tr("Il menu dell'icona vicino all'orologio cambia al prossimo avvio.", "The menu of the icon near the clock changes at the next start.")}</small>
+            </span>
+            <select value={settings.language} onchange={(e) => update({ language: e.currentTarget.value as Settings["language"] })}>
+              <option value="auto">{tr("Automatica (come Windows)", "Automatic (like Windows)")}</option>
+              <option value="it">Italiano</option>
+              <option value="en">English</option>
+            </select>
           </label>
           <div class="row">
             <span>
-              Tema della finestra «Tutte le note»
-              <small class="desc">Automatico segue il tema di Windows.</small>
+              {tr("Tema della finestra «Tutte le note»", "Theme of the “All notes” window")}
+              <small class="desc">{tr("Automatico segue il tema di Windows.", "Automatic follows the Windows theme.")}</small>
             </span>
             <div class="segmented">
-              <button class:on={settings.theme === "auto"} onclick={() => update({ theme: "auto" })}>Automatico</button>
-              <button class:on={settings.theme === "light"} onclick={() => update({ theme: "light" })}>Chiaro</button>
-              <button class:on={settings.theme === "dark"} onclick={() => update({ theme: "dark" })}>Scuro</button>
+              <button class:on={settings.theme === "auto"} onclick={() => update({ theme: "auto" })}>{tr("Automatico", "Automatic")}</button>
+              <button class:on={settings.theme === "light"} onclick={() => update({ theme: "light" })}>{tr("Chiaro", "Light")}</button>
+              <button class:on={settings.theme === "dark"} onclick={() => update({ theme: "dark" })}>{tr("Scuro", "Dark")}</button>
             </div>
           </div>
         </div>
 
-        <h4>Deck sul bordo dello schermo</h4>
+        <h4>{tr("Deck sul bordo dello schermo", "Deck on the screen edge")}</h4>
         <div class="group">
           <div class="row">
-            <span>Bordo</span>
+            <span>{tr("Bordo", "Edge")}</span>
             <div class="segmented">
-              <button class:on={settings.side === "left"} onclick={() => update({ side: "left" })}>Sinistra</button>
-              <button class:on={settings.side === "right"} onclick={() => update({ side: "right" })}>Destra</button>
+              <button class:on={settings.side === "left"} onclick={() => update({ side: "left" })}>{tr("Sinistra", "Left")}</button>
+              <button class:on={settings.side === "right"} onclick={() => update({ side: "right" })}>{tr("Destra", "Right")}</button>
             </div>
           </div>
           {#if monitors.length > 1}
             <label class="row">
-              <span>Schermo</span>
+              <span>{tr("Schermo", "Screen")}</span>
               <select value={settings.monitor ?? ""} onchange={(e) => update({ monitor: e.currentTarget.value || null })}>
-                <option value="">Principale</option>
+                <option value="">{tr("Principale", "Main")}</option>
                 {#each monitors as m (m.name)}
                   <option value={m.name}>{m.label}</option>
                 {/each}
@@ -487,7 +499,7 @@
             </label>
           {/if}
           <label class="row">
-            <span>Larghezza della nota aperta <small class="value">{settings.note_width} px</small></span>
+            <span>{tr("Larghezza della nota aperta", "Width of the open note")} <small class="value">{settings.note_width} px</small></span>
             <input
               type="range"
               min="280"
@@ -499,8 +511,8 @@
           </label>
           <label class="row">
             <span>
-              Trasparenza delle linguette <small class="value">{settings.deck_transparency}%</small>
-              <small class="desc">Più alta, più si vede lo sfondo attraverso.</small>
+              {tr("Trasparenza delle linguette", "Tab transparency")} <small class="value">{settings.deck_transparency}%</small>
+              <small class="desc">{tr("Più alta, più si vede lo sfondo attraverso.", "The higher, the more the background shows through.")}</small>
             </span>
             <input
               type="range"
@@ -513,10 +525,10 @@
           </label>
         </div>
       {:else if tab === "notes"}
-        <h4>Testo</h4>
+        <h4>{tr("Testo", "Text")}</h4>
         <div class="group">
           <label class="row">
-            <span>Carattere</span>
+            <span>{tr("Carattere", "Font")}</span>
             <select
               value={settings.editor_font}
               onchange={(e) => update({ editor_font: e.currentTarget.value as Settings["editor_font"] })}
@@ -527,7 +539,7 @@
             </select>
           </label>
           <label class="row">
-            <span>Dimensione <small class="value">{settings.editor_size} px</small></span>
+            <span>{tr("Dimensione", "Size")} <small class="value">{settings.editor_size} px</small></span>
             <input
               type="range"
               min="13"
@@ -537,18 +549,18 @@
             />
           </label>
           <p class="sample" style:font-family="var(--editor-font)" style:font-size="{settings.editor_size}px">
-            Comprare il latte e chiamare Marta
+            {tr("Comprare il latte e chiamare Marta", "Buy milk and call Martha")}
           </p>
         </div>
 
-        <h4>Colore delle note nuove</h4>
+        <h4>{tr("Colore delle note nuove", "Colour of new notes")}</h4>
         <div class="group">
           <div class="colors">
             <button
               class="cycle"
               class:on={settings.new_note_color === "cycle"}
               onclick={() => update({ new_note_color: "cycle" })}
-            >A rotazione</button>
+            >{tr("A rotazione", "Rotating")}</button>
             {#each COLORS as c (c)}
               <button
                 class="swatch"
@@ -563,32 +575,32 @@
           </div>
           <small class="desc pad">
             {settings.new_note_color === "cycle"
-              ? "Ogni nota nuova prende il colore successivo."
-              : `Le note nuove saranno ${COLOR_NAMES[settings.new_note_color]?.toLowerCase() ?? ""}. Puoi sempre cambiarlo dalla nota.`}
+              ? tr("Ogni nota nuova prende il colore successivo.", "Each new note takes the next colour.")
+              : `${tr("Le note nuove saranno", "New notes will be")} ${COLOR_NAMES[settings.new_note_color]?.toLowerCase() ?? ""}. ${tr("Puoi sempre cambiarlo dalla nota.", "You can always change it from the note.")}`}
           </small>
         </div>
 
-        <h4>🔒 Protezione con PIN</h4>
+        <h4>{tr("🔒 Protezione con PIN", "🔒 PIN protection")}</h4>
         <div class="group">
           {#if !hasPin()}
             <small class="desc pad">
-              Nessun PIN impostato. Attiva "Proteggi con PIN" su una nota per impostarne uno.
+              {tr("Nessun PIN impostato. Attiva \"Proteggi con PIN\" su una nota per impostarne uno.", "No PIN set. Turn on \"Protect with PIN\" on a note to set one.")}
             </small>
           {:else if changingPin}
             <label class="row">
-              <span>PIN attuale</span>
+              <span>{tr("PIN attuale", "Current PIN")}</span>
               <input type="password" inputmode="numeric" maxlength="6" bind:value={oldPin} />
             </label>
             <label class="row">
-              <span>Nuovo PIN</span>
+              <span>{tr("Nuovo PIN", "New PIN")}</span>
               <input type="password" inputmode="numeric" maxlength="6" bind:value={newPin} />
             </label>
             <label class="row">
-              <span>Conferma nuovo PIN</span>
+              <span>{tr("Conferma nuovo PIN", "Confirm new PIN")}</span>
               <input type="password" inputmode="numeric" maxlength="6" bind:value={newPinConfirm} />
             </label>
             <div class="row">
-              <button class="plain" onclick={submitChangePin}>Cambia PIN</button>
+              <button class="plain" onclick={submitChangePin}>{tr("Cambia PIN", "Change PIN")}</button>
               <button
                 class="plain"
                 onclick={() => {
@@ -596,58 +608,58 @@
                   oldPin = newPin = newPinConfirm = "";
                 }}
               >
-                Annulla
+                {tr("Annulla", "Cancel")}
               </button>
             </div>
           {:else}
             <div class="row">
-              <span>Le note protette richiedono questo PIN per essere lette o modificate.</span>
-              <button class="plain" onclick={() => (changingPin = true)}>Cambia PIN</button>
+              <span>{tr("Le note protette richiedono questo PIN per essere lette o modificate.", "Protected notes need this PIN to be read or edited.")}</span>
+              <button class="plain" onclick={() => (changingPin = true)}>{tr("Cambia PIN", "Change PIN")}</button>
             </div>
             <div class="row">
-              <span>Hai dimenticato il PIN? Il contenuto non si perde, ma tutte le note perdono la protezione.</span>
+              <span>{tr("Hai dimenticato il PIN? Il contenuto non si perde, ma tutte le note perdono la protezione.", "Forgot the PIN? The content is not lost, but all notes lose their protection.")}</span>
               <button class:danger={confirmResetPin} onclick={resetPin}>
-                {confirmResetPin ? "Conferma rimozione" : "Rimuovi protezione da tutte le note"}
+                {confirmResetPin ? tr("Conferma rimozione", "Confirm removal") : tr("Rimuovi protezione da tutte le note", "Remove protection from all notes")}
               </button>
             </div>
           {/if}
         </div>
       {:else if tab === "reminders"}
-        <h4>Notifiche</h4>
+        <h4>{tr("Notifiche", "Notifications")}</h4>
         <div class="group">
           <label class="row check">
-            <span>Suono</span>
+            <span>{tr("Suono", "Sound")}</span>
             <input type="checkbox" checked={settings.sound} onchange={(e) => update({ sound: e.currentTarget.checked })} />
           </label>
           {#if settings.sound}
             <div class="row sub">
-              <span>Quale suono</span>
+              <span>{tr("Quale suono", "Which sound")}</span>
               <div class="buttons">
                 <select value={settings.sound_name} onchange={(e) => update({ sound_name: e.currentTarget.value })}>
                   {#each SOUNDS as [key, label] (key)}
                     <option value={key}>{label}</option>
                   {/each}
                 </select>
-                <button class="plain" onclick={() => invoke("preview_sound", { name: settings.sound_name })}>▶ Prova</button>
+                <button class="plain" onclick={() => invoke("preview_sound", { name: settings.sound_name })}>{tr("▶ Prova", "▶ Try")}</button>
               </div>
             </div>
           {/if}
           <label class="row">
             <span>
-              Ripeti la notifica
-              <small class="desc">Finché non la segni come fatta o la posticipi.</small>
+              {tr("Ripeti la notifica", "Repeat the notification")}
+              <small class="desc">{tr("Finché non la segni come fatta o la posticipi.", "Until you mark it as done or snooze it.")}</small>
             </span>
             <select value={settings.repeat_minutes} onchange={(e) => update({ repeat_minutes: Number(e.currentTarget.value) })}>
-              <option value={0}>Mai</option>
+              <option value={0}>{tr("Mai", "Never")}</option>
               {#each [1, 2, 5, 10, 15, 30] as m (m)}
-                <option value={m}>Ogni {m} min</option>
+                <option value={m}>{tr("Ogni", "Every")} {m} min</option>
               {/each}
             </select>
           </label>
           <label class="row">
             <span>
-              Ora di «Domani»
-              <small class="desc">Quando posticipi un promemoria a domani.</small>
+              {tr("Ora di «Domani»", "Time of “Tomorrow”")}
+              <small class="desc">{tr("Quando posticipi un promemoria a domani.", "When you snooze a reminder until tomorrow.")}</small>
             </span>
             <input
               type="time"
@@ -657,47 +669,47 @@
           </label>
         </div>
 
-        <h4>Non disturbare</h4>
+        <h4>{tr("Non disturbare", "Do not disturb")}</h4>
         <div class="group">
           <div class="row">
             <span>
               {#if quietUntil}
-                <strong>🌙 In pausa fino alle {clock(quietUntil)}</strong>
-                <small class="desc">I promemoria arrivano tutti insieme alla fine.</small>
+                <strong>🌙 {tr("In pausa fino alle", "Paused until")} {clock(quietUntil)}</strong>
+                <small class="desc">{tr("I promemoria arrivano tutti insieme alla fine.", "Reminders all arrive together at the end.")}</small>
               {:else}
-                Metti in pausa le notifiche
+                {tr("Metti in pausa le notifiche", "Pause notifications")}
               {/if}
             </span>
             <div class="buttons">
               {#if settings.dnd_until}
-                <button class="plain" onclick={() => setDnd(null)}>Riattiva</button>
+                <button class="plain" onclick={() => setDnd(null)}>{tr("Riattiva", "Turn back on")}</button>
               {:else}
-                <button class="plain" onclick={() => setDnd(60)}>1 ora</button>
-                <button class="plain" onclick={() => setDnd("morning")}>Fino a domattina</button>
+                <button class="plain" onclick={() => setDnd(60)}>{tr("1 ora", "1 hour")}</button>
+                <button class="plain" onclick={() => setDnd("morning")}>{tr("Fino a domattina", "Until tomorrow morning")}</button>
               {/if}
             </div>
           </div>
           <label class="row check">
             <span>
-              Ogni giorno in una fascia oraria
-              <small class="desc">Per esempio di notte.</small>
+              {tr("Ogni giorno in una fascia oraria", "Every day at set hours")}
+              <small class="desc">{tr("Per esempio di notte.", "For example at night.")}</small>
             </span>
             <input type="checkbox" checked={settings.quiet_enabled} onchange={(e) => update({ quiet_enabled: e.currentTarget.checked })} />
           </label>
           {#if settings.quiet_enabled}
             <div class="row sub">
-              <span>Dalle … alle …</span>
+              <span>{tr("Dalle … alle …", "From … to …")}</span>
               <div class="buttons">
                 <input
                   type="time"
-                  aria-label="Inizio"
+                  aria-label={tr("Inizio", "Start")}
                   value={settings.quiet_from}
                   onchange={(e) => e.currentTarget.value && update({ quiet_from: e.currentTarget.value })}
                 />
                 <span>→</span>
                 <input
                   type="time"
-                  aria-label="Fine"
+                  aria-label={tr("Fine", "End")}
                   value={settings.quiet_to}
                   onchange={(e) => e.currentTarget.value && update({ quiet_to: e.currentTarget.value })}
                 />
@@ -706,12 +718,12 @@
           {/if}
         </div>
 
-        <h4>📋 Note dimenticate</h4>
+        <h4>{tr("📋 Note dimenticate", "📋 Forgotten notes")}</h4>
         <div class="group">
           <label class="row check">
             <span>
-              Avvisami delle note ferme da tempo
-              <small class="desc">Note attive, non fissate, senza promemoria o timer, non toccate da un po'.</small>
+              {tr("Avvisami delle note ferme da tempo", "Tell me about notes left untouched")}
+              <small class="desc">{tr("Note attive, non fissate, senza promemoria o timer, non toccate da un po'.", "Active notes, not pinned, without reminder or timer, untouched for a while.")}</small>
             </span>
             <input
               type="checkbox"
@@ -721,7 +733,7 @@
           </label>
           {#if settings.forgotten_enabled}
             <div class="row sub">
-              <span>Dopo quanti giorni</span>
+              <span>{tr("Dopo quanti giorni", "After how many days")}</span>
               <input
                 type="number"
                 min="1"
@@ -733,59 +745,55 @@
           {/if}
         </div>
       {:else if tab === "sync"}
-        <h4>I tuoi PC</h4>
+        <h4>{tr("I tuoi PC", "Your PCs")}</h4>
         {#if !settings.sync_dir}
           <div class="group">
             <p class="desc pad">
-              Scegli una cartella che il tuo servizio cloud tiene già sincronizzata, per esempio <strong>Il mio Drive</strong>
-              di Google Drive per desktop, OneDrive o Dropbox. Fai la stessa scelta sugli altri PC: Tabby crea lì dentro la
-              cartella «Tabby Sync» e unisce le note di tutti, senza perderne nessuna.
+              {tr("Scegli una cartella che il tuo servizio cloud tiene già sincronizzata, per esempio «Il mio Drive» di Google Drive per desktop, OneDrive o Dropbox. Fai la stessa scelta sugli altri PC: Tabby crea lì dentro la cartella «Tabby Sync» e unisce le note di tutti, senza perderne nessuna.", "Choose a folder that your cloud service already keeps in sync, for example “My Drive” of Google Drive for desktop, OneDrive or Dropbox. Make the same choice on your other PCs: Tabby creates a “Tabby Sync” folder in it and merges everyone's notes, without losing any.")}
             </p>
             <div class="row">
-              <span>Non sincronizzato</span>
-              <button class="plain primary" onclick={chooseSyncFolder}>Scegli cartella…</button>
+              <span>{tr("Non sincronizzato", "Not synced")}</span>
+              <button class="plain primary" onclick={chooseSyncFolder}>{tr("Scegli cartella…", "Choose folder…")}</button>
             </div>
           </div>
           <p class="tip">
-            💡 Viaggiano note, cartelle, promemoria, colori, note fissate, cestino e PIN. Restano di ogni PC: posizione del deck,
-            suoni, scorciatoie, Non disturbare e backup.
+            {tr("💡 Viaggiano note, cartelle, promemoria, colori, note fissate, cestino e PIN. Restano di ogni PC: posizione del deck, suoni, scorciatoie, Non disturbare e backup.", "💡 Notes, folders, reminders, colours, pinned notes, trash and PIN travel. Each PC keeps its own deck position, sounds, shortcuts, Do not disturb and backups.")}
           </p>
         {:else}
           <div class="group">
             <div class="row">
               <span class="path">
                 <strong>
-                  {syncStatus.needs_passphrase ? "🔑 Serve la frase segreta" : syncStatus.last_error ? "⚠ Sincronizzazione ferma" : "✓ Sincronizzato"}
+                  {syncStatus.needs_passphrase ? tr("🔑 Serve la frase segreta", "🔑 Passphrase needed") : syncStatus.last_error ? tr("⚠ Sincronizzazione ferma", "⚠ Sync stopped") : tr("✓ Sincronizzato", "✓ Synced")}
                 </strong>
                 <small class="desc" title={settings.sync_dir}>{settings.sync_dir}</small>
                 {#if syncStatus.last_error && !syncStatus.needs_passphrase}
                   <small class="desc warn">{syncStatus.last_error}</small>
                 {:else if syncStatus.last_sync && !syncStatus.needs_passphrase}
-                  <small class="desc">Ultimo controllo {ago(syncStatus.last_sync)} · le modifiche arrivano in pochi secondi</small>
+                  <small class="desc">{tr("Ultimo controllo", "Last check")} {ago(syncStatus.last_sync)} · {tr("le modifiche arrivano in pochi secondi", "changes arrive within seconds")}</small>
                 {/if}
               </span>
               <div class="buttons">
-                <button class="plain" onclick={() => invoke("sync_now")}>↻ Ora</button>
-                <button class="plain" onclick={chooseSyncFolder}>Cambia…</button>
+                <button class="plain" onclick={() => invoke("sync_now")}>{tr("↻ Ora", "↻ Now")}</button>
+                <button class="plain" onclick={chooseSyncFolder}>{tr("Cambia…", "Change…")}</button>
               </div>
             </div>
             {#each syncStatus.devices as d (d.name + d.this_pc)}
               <div class="row">
-                <span>💻 {d.name}{#if d.this_pc} <small class="value">(questo PC)</small>{/if}</span>
-                <small class="value">ultima modifica {ago(d.seen_at)}</small>
+                <span>💻 {d.name}{#if d.this_pc} <small class="value">{tr("(questo PC)", "(this PC)")}</small>{/if}</span>
+                <small class="value">{tr("ultima modifica", "last change")} {ago(d.seen_at)}</small>
               </div>
             {/each}
           </div>
 
-          <h4>Cifratura</h4>
+          <h4>{tr("Cifratura", "Encryption")}</h4>
           <div class="group">
             {#if syncStatus.needs_passphrase || passphraseOpen}
               <p class="desc pad">
                 {#if syncStatus.needs_passphrase}
-                  La cartella è cifrata da un altro PC: scrivi la stessa frase segreta per leggere e scrivere le note.
+                  {tr("La cartella è cifrata da un altro PC: scrivi la stessa frase segreta per leggere e scrivere le note.", "The folder was encrypted by another PC: type the same passphrase to read and write the notes.")}
                 {:else}
-                  Scegli una frase segreta (almeno 8 caratteri) e scrivila uguale su tutti i PC. <strong>Se la dimentichi, le note
-                  nella cartella condivisa non si possono più leggere</strong> (quelle su ogni PC restano).
+                  {tr("Scegli una frase segreta (almeno 8 caratteri) e scrivila uguale su tutti i PC. Se la dimentichi, le note nella cartella condivisa non si possono più leggere (quelle su ogni PC restano).", "Choose a passphrase (at least 8 characters) and type it the same on all your PCs. If you forget it, the notes in the shared folder can no longer be read (the ones on each PC stay).")}
                 {/if}
               </p>
               <form class="row" onsubmit={(e) => { e.preventDefault(); savePassphrase(); }}>
@@ -793,48 +801,47 @@
                   class="passphrase"
                   type="password"
                   autocomplete="new-password"
-                  placeholder="Frase segreta"
+                  placeholder={tr("Frase segreta", "Passphrase")}
                   bind:value={passphrase}
                 />
                 <div class="buttons">
                   {#if passphraseOpen && !syncStatus.needs_passphrase}
-                    <button type="button" class="plain" onclick={() => { passphraseOpen = false; passphrase = ""; }}>Annulla</button>
+                    <button type="button" class="plain" onclick={() => { passphraseOpen = false; passphrase = ""; }}>{tr("Annulla", "Cancel")}</button>
                   {/if}
                   <button class="plain primary" disabled={passphraseBusy || passphrase.trim().length < 8}>
-                    {passphraseBusy ? "Attendere…" : syncStatus.needs_passphrase ? "Sblocca" : "Cifra la cartella"}
+                    {passphraseBusy ? tr("Attendere…", "Please wait…") : syncStatus.needs_passphrase ? tr("Sblocca", "Unlock") : tr("Cifra la cartella", "Encrypt the folder")}
                   </button>
                 </div>
               </form>
             {:else if syncStatus.encrypted}
               <div class="row">
                 <span>
-                  🔒 Cifrata con la frase segreta
-                  <small class="desc">Su Drive ci sono solo dati illeggibili, anche per Google. Le copie per il telefono sono spente.</small>
+                  {tr("🔒 Cifrata con la frase segreta", "🔒 Encrypted with the passphrase")}
+                  <small class="desc">{tr("Su Drive ci sono solo dati illeggibili, anche per Google. Le copie per il telefono sono spente.", "Only unreadable data is on Drive, even for Google. Phone copies are off.")}</small>
                 </span>
                 <button class="plain" class:danger={confirmDecrypt} onclick={removeEncryption}>
-                  {confirmDecrypt ? "Conferma" : "Togli"}
+                  {confirmDecrypt ? tr("Conferma", "Confirm") : tr("Togli", "Remove")}
                 </button>
               </div>
             {:else}
               <div class="row">
                 <span>
-                  Non cifrata
-                  <small class="desc">Le note nella cartella condivisa sono leggibili da chi può aprirla (anche quelle col PIN).</small>
+                  {tr("Non cifrata", "Not encrypted")}
+                  <small class="desc">{tr("Le note nella cartella condivisa sono leggibili da chi può aprirla (anche quelle col PIN).", "Anyone who can open the shared folder can read the notes in it (PIN-protected ones too).")}</small>
                 </span>
-                <button class="plain" onclick={() => (passphraseOpen = true)}>Cifra…</button>
+                <button class="plain" onclick={() => (passphraseOpen = true)}>{tr("Cifra…", "Encrypt…")}</button>
               </div>
             {/if}
           </div>
 
           {#if !syncStatus.encrypted}
-            <h4>Sul telefono</h4>
+            <h4>{tr("Sul telefono", "On your phone")}</h4>
             <div class="group">
               <label class="row check">
                 <span>
-                  Copie da leggere sul telefono
+                  {tr("Copie da leggere sul telefono", "Copies to read on your phone")}
                   <small class="desc">
-                    Un file per nota nella cartella «Note da leggere», da aprire con l'app di Google Drive, OneDrive o Dropbox.
-                    Solo lettura; le note col PIN, archiviate o nel cestino non vengono copiate.
+                    {tr("Un file per nota nella cartella «Note da leggere», da aprire con l'app di Google Drive, OneDrive o Dropbox. Solo lettura; le note col PIN, archiviate o nel cestino non vengono copiate.", "One file per note in the “Notes to read” folder, to open with the Google Drive, OneDrive or Dropbox app. Read-only; PIN-protected, archived or trashed notes are not copied.")}
                   </small>
                 </span>
                 <input type="checkbox" checked={syncStatus.phone_copy} onchange={(e) => setPhoneCopy(e.currentTarget.checked)} />
@@ -845,25 +852,23 @@
           <div class="group">
             <div class="row">
               <span>
-                Smetti di sincronizzare
-                <small class="desc">Le note restano su questo PC; la cartella condivisa e gli altri PC non vengono toccati.</small>
+                {tr("Smetti di sincronizzare", "Stop syncing")}
+                <small class="desc">{tr("Le note restano su questo PC; la cartella condivisa e gli altri PC non vengono toccati.", "The notes stay on this PC; the shared folder and the other PCs are not touched.")}</small>
               </span>
               <button class="plain" class:danger={syncConfirmOff} onclick={syncDisconnect}>
-                {syncConfirmOff ? "Conferma" : "Scollega"}
+                {syncConfirmOff ? tr("Conferma", "Confirm") : tr("Scollega", "Disconnect")}
               </button>
             </div>
           </div>
           <p class="tip">
-            💡 Se la stessa nota cambia su due PC mentre uno è spento, vince la modifica più recente e l'altra resta nella
-            cronologia della nota. Il PIN impostato per ultimo vale su tutti i PC.
+            {tr("💡 Se la stessa nota cambia su due PC mentre uno è spento, vince la modifica più recente e l'altra resta nella cronologia della nota. Il PIN impostato per ultimo vale su tutti i PC.", "💡 If the same note changes on two PCs while one is off, the most recent change wins and the other stays in the note's history. The PIN set last applies on all PCs.")}
           </p>
         {/if}
 
-        <h4>Liste condivise con altre persone</h4>
+        <h4>{tr("Liste condivise con altre persone", "Lists shared with other people")}</h4>
         <div class="group">
           <p class="desc pad">
-            Una cartella di note (per esempio la spesa) che vedete e modificate in più persone. Si usa una cartella di Drive,
-            OneDrive o Dropbox condivisa con loro. Le note col PIN non vengono mai condivise.
+            {tr("Una cartella di note (per esempio la spesa) che vedete e modificate in più persone. Si usa una cartella di Drive, OneDrive o Dropbox condivisa con loro. Le note col PIN non vengono mai condivise.", "A folder of notes (for example the shopping) that several people see and edit. It uses a Drive, OneDrive or Dropbox folder shared with them. PIN-protected notes are never shared.")}
           </p>
           {#each syncStatus.shares as share (share.folder_uid)}
             <div class="row">
@@ -875,98 +880,96 @@
                 {:else}
                   <small class="desc">
                     {share.devices.filter((d) => !d.this_pc).length > 0
-                      ? `Con: ${share.devices.filter((d) => !d.this_pc).map((d) => d.name).join(", ")}`
-                      : "Nessun altro ancora collegato"}
+                      ? `${tr("Con", "With")}: ${share.devices.filter((d) => !d.this_pc).map((d) => d.name).join(", ")}`
+                      : tr("Nessun altro ancora collegato", "Nobody else connected yet")}
                   </small>
                 {/if}
               </span>
               <button class="plain" class:danger={confirmLeave === share.folder_uid} onclick={() => leaveShare(share.folder_uid)}>
-                {confirmLeave === share.folder_uid ? "Conferma" : "Smetti"}
+                {confirmLeave === share.folder_uid ? tr("Conferma", "Confirm") : tr("Smetti", "Stop")}
               </button>
             </div>
           {/each}
           <div class="row">
-            <select bind:value={shareFolderId} aria-label="Cartella da condividere">
-              <option value={null}>Condividi una cartella…</option>
+            <select bind:value={shareFolderId} aria-label={tr("Cartella da condividere", "Folder to share")}>
+              <option value={null}>{tr("Condividi una cartella…", "Share a folder…")}</option>
               {#each folders.filter((f) => !syncStatus.shares.some((x) => x.name === f.name)) as f (f.id)}
                 <option value={f.id}>{f.name}</option>
               {/each}
             </select>
             <div class="buttons">
-              <button class="plain" disabled={shareFolderId === null} onclick={shareFolder}>Scegli dove…</button>
-              <button class="plain" onclick={joinShare}>Unisciti…</button>
+              <button class="plain" disabled={shareFolderId === null} onclick={shareFolder}>{tr("Scegli dove…", "Choose where…")}</button>
+              <button class="plain" onclick={joinShare}>{tr("Unisciti…", "Join…")}</button>
             </div>
           </div>
         </div>
         <p class="tip">
-          💡 Per condividere: scegli la cartella di note, poi una cartella di Drive vuota, e da Google Drive condividi quella cartella
-          con le altre persone. Loro, in Tabby, premono «Unisciti…» e scelgono la cartella che hanno ricevuto.
+          {tr("💡 Per condividere: scegli la cartella di note, poi una cartella di Drive vuota, e da Google Drive condividi quella cartella con le altre persone. Loro, in Tabby, premono «Unisciti…» e scelgono la cartella che hanno ricevuto.", "💡 To share: choose the note folder, then an empty Drive folder, and share that folder with the other people from Google Drive. In Tabby they press “Join…” and choose the folder they received.")}
         </p>
       {:else if tab === "backup"}
-        <h4>Backup automatico</h4>
+        <h4>{tr("Backup automatico", "Automatic backup")}</h4>
         <div class="group">
           <label class="row check">
             <span>
-              Ogni giorno
-              <small class="desc">Copia di note e immagini.</small>
+              {tr("Ogni giorno", "Every day")}
+              <small class="desc">{tr("Copia di note e immagini.", "Copy of notes and images.")}</small>
             </span>
             <input type="checkbox" checked={settings.backup_enabled} onchange={(e) => update({ backup_enabled: e.currentTarget.checked })} />
           </label>
           <div class="row">
             <span class="path">
-              Cartella
-              <small class="desc" title={backupFolder}>{settings.backup_dir ? backupFolder : "Predefinita (nella cartella dei dati)"}</small>
+              {tr("Cartella", "Folder")}
+              <small class="desc" title={backupFolder}>{settings.backup_dir ? backupFolder : tr("Predefinita (nella cartella dei dati)", "Default (in the data folder)")}</small>
             </span>
             <div class="buttons">
               {#if settings.backup_dir}
-                <button class="plain" onclick={defaultBackupFolder}>Predefinita</button>
+                <button class="plain" onclick={defaultBackupFolder}>{tr("Predefinita", "Default")}</button>
               {/if}
-              <button class="plain" onclick={chooseBackupFolder}>Cambia…</button>
+              <button class="plain" onclick={chooseBackupFolder}>{tr("Cambia…", "Change…")}</button>
             </div>
           </div>
           {#if !settings.backup_dir}
-            <p class="tip">💡 Meglio un altro disco o una cartella di OneDrive: se si guasta questo disco, i backup restano al sicuro.</p>
+            <p class="tip">{tr("💡 Meglio un altro disco o una cartella di OneDrive: se si guasta questo disco, i backup restano al sicuro.", "💡 Better another disk or a OneDrive folder: if this disk breaks, the backups stay safe.")}</p>
           {/if}
           <label class="row">
-            <span>Quanti tenerne</span>
+            <span>{tr("Quanti tenerne", "How many to keep")}</span>
             <select value={settings.backup_keep} onchange={(e) => update({ backup_keep: Number(e.currentTarget.value) })}>
               {#each [3, 7, 14, 30] as n (n)}
-                <option value={n}>Gli ultimi {n}</option>
+                <option value={n}>{tr("Gli ultimi", "The last")} {n}</option>
               {/each}
             </select>
           </label>
           <div class="row">
             <span>
-              {backupResult || (backups[0] ? `Ultimo backup: ${backupDate(backups[0].created_at)}` : "Nessun backup ancora")}
+              {backupResult || (backups[0] ? `${tr("Ultimo backup", "Last backup")}: ${backupDate(backups[0].created_at)}` : tr("Nessun backup ancora", "No backup yet"))}
             </span>
             <div class="buttons">
-              <button class="plain" onclick={() => invoke("open_backup_folder")}>Apri</button>
+              <button class="plain" onclick={() => invoke("open_backup_folder")}>{tr("Apri", "Open")}</button>
               <button class="plain" disabled={backingUp || restoring} onclick={backupNow}>
-                {backingUp ? "Backup…" : "Esegui ora"}
+                {backingUp ? "Backup…" : tr("Esegui ora", "Run now")}
               </button>
             </div>
           </div>
         </div>
 
         {#if backups.length > 0}
-          <h4>Ripristina</h4>
+          <h4>{tr("Ripristina", "Restore")}</h4>
           <div class="group">
             <p class="desc pad">
-              Le note attuali vengono sostituite da quelle del backup. Prima Tabby salva lo stato attuale in un nuovo backup,
-              così puoi sempre tornare indietro.
+              {tr("Le note attuali vengono sostituite da quelle del backup. Prima Tabby salva lo stato attuale in un nuovo backup, così puoi sempre tornare indietro.", "The current notes are replaced by those in the backup. First Tabby saves the current state in a new backup, so you can always go back.")}
             </p>
             <details class="backups">
-              <summary>Scegli un backup ({backups.length})</summary>
+              <summary>{tr("Scegli un backup", "Choose a backup")} ({backups.length})</summary>
               {#each backups as b (b.name)}
                 <div class="backup-row">
-                  <span>{backupDate(b.created_at)} <small class="value">{b.notes} note · {b.media_files} file</small></span>
+                  <span>{backupDate(b.created_at)} <small class="value">{plural(b.notes, ["nota", "note"], ["note", "notes"])} · {plural(b.media_files, ["file", "file"], ["file", "files"])}</small></span>
                   <button
                     class="plain"
                     class:danger={confirmRestore === b.name}
                     disabled={restoring || backingUp}
                     onclick={() => restore(b.name)}
                   >
-                    {restoring && confirmRestore === null ? "…" : confirmRestore === b.name ? "Conferma ripristino" : "Ripristina"}
+                    {restoring && confirmRestore === null ? "…" : confirmRestore === b.name ? tr("Conferma ripristino", "Confirm restore") : tr("Ripristina", "Restore")}
                   </button>
                 </div>
               {/each}
@@ -974,42 +977,42 @@
           </div>
         {/if}
 
-        <h4>Dati</h4>
+        <h4>{tr("Dati", "Data")}</h4>
         <div class="group">
           <div class="row">
-            <span>Note, immagini e impostazioni sono salvate su questo PC.</span>
-            <button class="plain" onclick={() => invoke("open_data_folder")}>Apri la cartella</button>
+            <span>{tr("Note, immagini e impostazioni sono salvate su questo PC.", "Notes, images and settings are stored on this PC.")}</span>
+            <button class="plain" onclick={() => invoke("open_data_folder")}>{tr("Apri la cartella", "Open the folder")}</button>
           </div>
         </div>
       {:else}
         <div class="group">
           <p class="about">
             <strong>Tabby</strong>{version ? ` ${version}` : ""}<br />
-            Creato da <strong>Roberto Pisco Pisconti</strong>
+            {tr("Creato da", "Made by")} <strong>Roberto Pisco Pisconti</strong>
           </p>
           <div class="row">
             <span>
               {#if update_}
-                <strong>Nuova versione {update_.version} disponibile</strong>
+                <strong>{tr("Nuova versione", "New version")} {update_.version} {tr("disponibile", "available")}</strong>
               {:else if updateStatus === "checking"}
-                Controllo aggiornamenti…
+                {tr("Controllo aggiornamenti…", "Checking for updates…")}
               {:else if updateStatus === "latest"}
-                Hai l'ultima versione.
+                {tr("Hai l'ultima versione.", "You have the latest version.")}
               {:else if updateStatus === "failed"}
-                Non riesco a controllare gli aggiornamenti.
+                {tr("Non riesco a controllare gli aggiornamenti.", "I can't check for updates.")}
               {:else}
-                Aggiornamenti
+                {tr("Aggiornamenti", "Updates")}
               {/if}
             </span>
             {#if update_}
-              <button class="plain primary" onclick={() => update_ && openUrl(update_.url)}>Scarica</button>
+              <button class="plain primary" onclick={() => update_ && openUrl(update_.url)}>{tr("Scarica", "Download")}</button>
             {:else}
-              <button class="plain" disabled={updateStatus === "checking"} onclick={checkUpdate}>Controlla ora</button>
+              <button class="plain" disabled={updateStatus === "checking"} onclick={checkUpdate}>{tr("Controlla ora", "Check now")}</button>
             {/if}
           </div>
         </div>
 
-        <h4>Scorciatoie da tastiera</h4>
+        <h4>{tr("Scorciatoie da tastiera", "Keyboard shortcuts")}</h4>
         <div class="group">
           <dl>
             {#each SHORTCUTS as [keys, action] (keys)}
@@ -1017,7 +1020,7 @@
               <dd>{action}</dd>
             {/each}
           </dl>
-          <p class="desc pad">Se un'altra app usa già una di queste combinazioni, quella scorciatoia non è disponibile.</p>
+          <p class="desc pad">{tr("Se un'altra app usa già una di queste combinazioni, quella scorciatoia non è disponibile.", "If another app already uses one of these combinations, that shortcut is not available.")}</p>
         </div>
       {/if}
     </section>

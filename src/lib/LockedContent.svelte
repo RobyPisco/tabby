@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { tr } from "$lib/i18n";
   import { invoke } from "@tauri-apps/api/core";
   import type { Note } from "$lib/notes";
 
@@ -17,7 +18,7 @@
       pin = "";
       onunlocked(note);
     } catch {
-      error = "PIN sbagliato";
+      error = tr("PIN sbagliato", "Wrong PIN");
     } finally {
       unlocking = false;
     }
@@ -25,7 +26,7 @@
 </script>
 
 <div class="locked">
-  <p class="label">🔒 Nota protetta</p>
+  <p class="label">{tr("🔒 Nota protetta", "🔒 Protected note")}</p>
   <form
     class="row"
     onsubmit={(e) => {
@@ -35,7 +36,7 @@
   >
     <!-- svelte-ignore a11y_autofocus -->
     <input type="password" inputmode="numeric" maxlength="6" placeholder="PIN" bind:value={pin} autofocus />
-    <button type="submit" disabled={unlocking}>Sblocca</button>
+    <button type="submit" disabled={unlocking}>{tr("Sblocca", "Unlock")}</button>
   </form>
   {#if error}<p class="error">{error}</p>{/if}
 </div>

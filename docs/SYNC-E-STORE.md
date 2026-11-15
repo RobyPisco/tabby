@@ -52,6 +52,9 @@ Nessun server: l'utente sceglie una cartella che il suo servizio cloud tiene gi�
 - **Cerca ovunque** (`Ctrl+Alt+F`): finestra `search`.
 Provati con `e2e.py` (tre "PC" finti: A, B e C di un'altra persona): 15 verifiche passate.
 
+## Inglese ✅ (15/11/2026)
+Lingua automatica (quella di Windows: italiano se è italiano, altrimenti inglese) o scelta in Impostazioni → Generale. `src/lib/i18n.ts` (`tr(it, en)`, `plural`, `locale`) e `src-tauri/src/i18n.rs` (notifiche, menu della tray — cambia al riavvio —, errori). Date a parole anche in inglese (`parseEnglishDate`). Installer NSIS in italiano e inglese. Versione 1.5.0.
+
 ## Passo 3 — Microsoft Store (dopo)
 - Iscrizione sviluppatore gratuita con un account Microsoft personale.
 - Pacchetto **MSIX** (lo firma Microsoft gratis): passaggio con `makeappx` del Windows SDK dopo la build di Tauri, automatizzabile in `release.yml`.

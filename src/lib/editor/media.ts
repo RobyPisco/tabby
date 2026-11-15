@@ -1,5 +1,6 @@
 import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import type { EditorView } from "@codemirror/view";
+import { tr } from "$lib/i18n";
 
 let mediaDir: string | null = null;
 
@@ -40,9 +41,9 @@ export async function saveFile(file: File): Promise<string> {
     return `![](media/${name})`;
   }
   const name = await invoke<string>("save_attachment", bytes, {
-    headers: { "x-file-name": encodeURIComponent(file.name || "allegato") },
+    headers: { "x-file-name": encodeURIComponent(file.name || tr("allegato", "attachment")) },
   });
-  return `[📎 ${file.name || "allegato"}](media/${name})`;
+  return `[📎 ${file.name || tr("allegato", "attachment")}](media/${name})`;
 }
 
 function droppedFiles(data: DataTransfer | null): File[] {

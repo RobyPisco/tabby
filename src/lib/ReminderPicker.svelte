@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { tr } from "$lib/i18n";
   import { clock } from "$lib/clock.svelte";
   import { parseDate } from "$lib/nlDate";
   import { formatReminder, REPEAT_LABELS, type Repeat } from "$lib/notes";
@@ -54,14 +55,14 @@
     void clock.now;
     const inOneHour = new Date(Date.now() + 3_600_000);
     inOneHour.setSeconds(0, 0);
-    const evening = new Date().getHours() < 18 ? { label: "Stasera 18:00", date: at(0, 18) } : { label: "Domani 18:00", date: at(1, 18) };
+    const evening = new Date().getHours() < 18 ? { label: tr("Stasera 18:00", "Tonight 18:00"), date: at(0, 18) } : { label: tr("Domani 18:00", "Tomorrow 18:00"), date: at(1, 18) };
     const [h, m] = splitTime(settings.tomorrow_time);
     const time = `${h}:${String(m).padStart(2, "0")}`;
     return [
-      { label: "Tra 1 ora", date: inOneHour },
+      { label: tr("Tra 1 ora", "In 1 hour"), date: inOneHour },
       evening,
-      { label: `Domani ${time}`, date: at(1, h, m) },
-      { label: `Lunedì ${time}`, date: nextMonday(h, m) },
+      { label: `${tr("Domani", "Tomorrow")} ${time}`, date: at(1, h, m) },
+      { label: `${tr("Lunedì", "Monday")} ${time}`, date: nextMonday(h, m) },
     ];
   });
 
@@ -118,8 +119,8 @@
     onclick={() => (open = !open)}
     aria-haspopup="dialog"
     aria-expanded={open}
-    aria-label="Promemoria"
-    title="Promemoria"
+    aria-label={tr("Promemoria", "Reminder")}
+    title={tr("Promemoria", "Reminder")}
   >
     <svg viewBox="0 0 20 20" aria-hidden="true">
       <path d="M10 2.5a5 5 0 0 0-5 5v3.2L3.6 13.5h12.8L15 10.7V7.5a5 5 0 0 0-5-5Z" />
@@ -129,19 +130,19 @@
 
   {#if open}
     <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
-    <div class="panel" role="dialog" aria-label="Promemoria" tabindex="-1" onkeydown={onKeydown}>
+    <div class="panel" role="dialog" aria-label={tr("Promemoria", "Reminder")} tabindex="-1" onkeydown={onKeydown}>
       <label>
-        <span>Quando</span>
+        <span>{tr("Quando", "When")}</span>
         <input
           class="phrase"
           bind:this={phraseInput}
           bind:value={phrase}
-          placeholder="es. domani alle 9, tra 2 ore"
+          placeholder={tr("es. domani alle 9, tra 2 ore", "e.g. tomorrow at 9, in 2 hours")}
           spellcheck="false"
         />
         {#if phrase.trim()}
           <small class:ok={parsed} class:ko={!parsed}>
-            {parsed ? `→ ${formatReminder(Math.floor(parsed.getTime() / 1000))} · Invio per impostare` : "Non ho capito la data"}
+            {parsed ? `→ ${formatReminder(Math.floor(parsed.getTime() / 1000))} · ${tr("Invio per impostare", "Enter to set")}` : tr("Non ho capito la data", "I didn't understand the date")}
           </small>
         {/if}
       </label>
@@ -151,11 +152,11 @@
         {/each}
       </div>
       <label>
-        <span>Data e ora</span>
+        <span>{tr("Data e ora", "Date and time")}</span>
         <input type="datetime-local" bind:this={dateInput} bind:value />
       </label>
       <label>
-        <span>Ripeti</span>
+        <span>{tr("Ripeti", "Repeat")}</span>
         <select bind:value={chosenRepeat}>
           {#each Object.entries(REPEAT_LABELS) as [key, label] (key)}
             <option value={key}>{label}</option>
@@ -164,9 +165,9 @@
       </label>
       <div class="buttons">
         {#if remindAt !== null}
-          <button class="remove" onclick={clear}>Rimuovi</button>
+          <button class="remove" onclick={clear}>{tr("Rimuovi", "Remove")}</button>
         {/if}
-        <button class="primary" onclick={applyInput}>Imposta</button>
+        <button class="primary" onclick={applyInput}>{tr("Imposta", "Set")}</button>
       </div>
     </div>
   {/if}

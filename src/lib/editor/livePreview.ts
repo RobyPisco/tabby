@@ -11,6 +11,7 @@ import {
 import { toggleTaskAt } from "./commands";
 import { TAG, WIKILINK } from "./links";
 import { attachmentLabel, mediaName, mediaUrl } from "./media";
+import { tr } from "$lib/i18n";
 
 /**
  * Anteprima dal vivo del Markdown: il testo resta Markdown, ma fuori dalla riga su cui
@@ -31,7 +32,7 @@ class CheckboxWidget extends WidgetType {
     box.type = "checkbox";
     box.checked = this.checked;
     box.className = "cm-task-box";
-    box.setAttribute("aria-label", this.checked ? "Fatto" : "Da fare");
+    box.setAttribute("aria-label", this.checked ? tr("Fatto", "Done") : tr("Da fare", "To do"));
     box.addEventListener("mousedown", (event) => {
       event.preventDefault(); // niente spostamento del cursore
       toggleTaskAt(view, view.posAtDOM(box));
@@ -60,7 +61,7 @@ class ImageWidget extends WidgetType {
     img.alt = this.alt;
     img.className = "cm-image";
     img.draggable = false;
-    img.title = "Clic per ingrandire";
+    img.title = tr("Clic per ingrandire", "Click to enlarge");
     // L'editor che contiene l'immagine ascolta questi eventi (vedi NoteEditor.svelte).
     const notify = (kind: "open" | "menu", event: MouseEvent) => {
       event.preventDefault();
@@ -96,7 +97,7 @@ class AttachmentWidget extends WidgetType {
     chip.className = "cm-attachment";
     chip.dataset.media = this.name;
     chip.textContent = this.label.startsWith("📎") ? this.label : `📎 ${this.label}`;
-    chip.title = "Apri il file";
+    chip.title = tr("Apri il file", "Open the file");
     return chip;
   }
   ignoreEvent() {

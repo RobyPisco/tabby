@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { tr } from "$lib/i18n";
   import { clock } from "$lib/clock.svelte";
   import { parseDate } from "$lib/nlDate";
   import { formatReminder, isOverdue, REPEAT_LABELS, type Note, type ReminderAction } from "$lib/notes";
@@ -34,9 +35,9 @@
     evening.setHours(18, 0, 0, 0);
     return [
       { label: "30 min", date: new Date(now + 30 * 60_000) },
-      { label: "2 ore", date: new Date(now + 2 * 3_600_000) },
-      { label: "3 ore", date: new Date(now + 3 * 3_600_000) },
-      { label: late ? "Domani 18:00" : "Stasera 18:00", date: evening },
+      { label: tr("2 ore", "2 hours"), date: new Date(now + 2 * 3_600_000) },
+      { label: tr("3 ore", "3 hours"), date: new Date(now + 3 * 3_600_000) },
+      { label: late ? tr("Domani 18:00", "Tomorrow 18:00") : tr("Stasera 18:00", "Tonight 18:00"), date: evening },
     ];
   });
 
@@ -70,7 +71,7 @@
 {#if note.remind_at !== null}
   <div class="line" class:overdue bind:this={root}>
     <span class="when">
-      {overdue ? "Scaduto" : "Promemoria"} · {formatReminder(note.remind_at)}
+      {overdue ? tr("Scaduto", "Overdue") : tr("Promemoria", "Reminder")} · {formatReminder(note.remind_at)}
       {#if note.repeat && note.repeat !== "none"}
         <!-- Scaduto c'è meno spazio (ci sono i pulsanti): basta il simbolo. -->
         · <span title={REPEAT_LABELS[note.repeat]}>{overdue ? "↻" : REPEAT_LABELS[note.repeat].toLowerCase()}</span>
@@ -78,22 +79,22 @@
     </span>
     {#if overdue}
       <span class="actions">
-        <button onclick={() => onaction("snooze10")} title="Posticipa di 10 minuti">10 min</button>
-        <button onclick={() => onaction("tomorrow")} title="Posticipa a domani alle {settings.tomorrow_time}">Domani</button>
+        <button onclick={() => onaction("snooze10")} title={tr("Posticipa di 10 minuti", "Snooze for 10 minutes")}>10 min</button>
+        <button onclick={() => onaction("tomorrow")} title={`${tr("Posticipa a domani alle", "Snooze until tomorrow at")} ${settings.tomorrow_time}`}>{tr("Domani", "Tomorrow")}</button>
         <button
           class:on={snoozeOpen}
           onclick={() => (snoozeOpen = !snoozeOpen)}
           aria-expanded={snoozeOpen}
-          aria-label="Posticipa a un orario a scelta"
-          title="Posticipa a un orario a scelta"
+          aria-label={tr("Posticipa a un orario a scelta", "Snooze until a time of your choice")}
+          title={tr("Posticipa a un orario a scelta", "Snooze until a time of your choice")}
         >⋯</button>
-        <button class="done" onclick={() => onaction("done")}>Fatto</button>
+        <button class="done" onclick={() => onaction("done")}>{tr("Fatto", "Done")}</button>
       </span>
     {/if}
     {#if snoozeOpen}
       <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
-      <div class="panel" role="dialog" aria-label="Posticipa" tabindex="-1" onkeydown={onKeydown}>
-        <span class="label">Posticipa a</span>
+      <div class="panel" role="dialog" aria-label={tr("Posticipa", "Snooze")} tabindex="-1" onkeydown={onKeydown}>
+        <span class="label">{tr("Posticipa a", "Snooze until")}</span>
         <div class="choices">
           {#each choices as choice (choice.label)}
             <button onclick={() => snooze(choice.date)}>{choice.label}</button>
@@ -102,12 +103,12 @@
         <input
           bind:this={phraseInput}
           bind:value={phrase}
-          placeholder="es. alle 15:30, tra 45 minuti, venerdì"
+          placeholder={tr("es. alle 15:30, tra 45 minuti, venerdì", "e.g. at 3:30pm, in 45 minutes, friday")}
           spellcheck="false"
         />
         {#if phrase.trim()}
           <small class:ok={parsed} class:ko={!parsed}>
-            {parsed ? `→ ${formatReminder(Math.floor(parsed.getTime() / 1000))} · Invio per posticipare` : "Non ho capito la data"}
+            {parsed ? `→ ${formatReminder(Math.floor(parsed.getTime() / 1000))} · ${tr("Invio per posticipare", "Enter to snooze")}` : tr("Non ho capito la data", "I didn't understand the date")}
           </small>
         {/if}
       </div>

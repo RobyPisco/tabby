@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { tr } from "$lib/i18n";
   import { defaultKeymap, history, historyKeymap, indentWithTab } from "@codemirror/commands";
   import { markdown, markdownKeymap, markdownLanguage } from "@codemirror/lang-markdown";
   import { Compartment, EditorSelection, EditorState } from "@codemirror/state";
@@ -24,7 +25,7 @@
     value,
     onchange,
     onopenlink,
-    placeholder = "Scrivi qui…",
+    placeholder = undefined,
     readonly = false,
   }: {
     value: string;
@@ -74,7 +75,7 @@
             tooltips({ position: "absolute" }),
             noteTheme,
             EditorView.lineWrapping,
-            placeholderExt(placeholder),
+            placeholderExt(placeholder ?? tr("Scrivi qui…", "Write here…")),
             editable.of(EditorState.readOnly.of(readonly)),
             EditorView.domEventHandlers({ paste: handlePaste, drop: handleDrop }),
             EditorView.updateListener.of((update) => {
@@ -133,7 +134,7 @@
       menu = null;
     } catch (e) {
       console.error("immagine non copiata", e);
-      menuNote = "Copia non riuscita";
+      menuNote = tr("Copia non riuscita", "Copy failed");
     }
   }
 
@@ -204,13 +205,13 @@
         onclick={() => {
           viewing = menu;
           menu = null;
-        }}>Ingrandisci</button
+        }}>{tr("Ingrandisci", "Enlarge")}</button
       >
-      <button onclick={copyImage}>Copia immagine</button>
+      <button onclick={copyImage}>{tr("Copia immagine", "Copy image")}</button>
       {#if menu.name}
-        <button onclick={saveImageAs}>Salva con nome…</button>
-        <button onclick={openExternally}>Apri con il programma predefinito</button>
-        {#if !readonly}<button class="danger" onclick={removeImage}>Rimuovi dalla nota</button>{/if}
+        <button onclick={saveImageAs}>{tr("Salva con nome…", "Save as…")}</button>
+        <button onclick={openExternally}>{tr("Apri con il programma predefinito", "Open with the default program")}</button>
+        {#if !readonly}<button class="danger" onclick={removeImage}>{tr("Rimuovi dalla nota", "Remove from the note")}</button>{/if}
       {/if}
       {#if menuNote}<small>{menuNote}</small>{/if}
     </div>

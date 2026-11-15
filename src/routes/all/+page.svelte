@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { plural, tr } from "$lib/i18n";
   import { invoke } from "@tauri-apps/api/core";
   import { listen } from "@tauri-apps/api/event";
   import { getCurrentWindow } from "@tauri-apps/api/window";
@@ -42,10 +43,10 @@
   const SEARCH_DEBOUNCE_MS = 120;
   const SAVE_DEBOUNCE_MS = 250;
   const FILTERS: { value: Filter; label: string }[] = [
-    { value: "all", label: "Tutte" },
-    { value: "active", label: "Attive" },
-    { value: "archived", label: "Archiviate" },
-    { value: "trash", label: "Cestino" },
+    { value: "all", get label() { return tr("Tutte", "All"); } },
+    { value: "active", get label() { return tr("Attive", "Active"); } },
+    { value: "archived", get label() { return tr("Archiviate", "Archived"); } },
+    { value: "trash", get label() { return tr("Cestino", "Trash"); } },
   ];
   const TRASH_RETENTION_DAYS = 30; // come in db.rs
 
@@ -297,9 +298,12 @@
     return note;
   }
 
-  // Anche la barra del titolo di Windows segue il tema scelto.
+  // Anche la barra del titolo di Windows segue il tema e la lingua scelti.
   $effect(() => {
     getCurrentWindow().setTheme(settings.theme === "auto" ? null : settings.theme);
+  });
+  $effect(() => {
+    getCurrentWindow().setTitle(tr("Tutte le note", "All notes"));
   });
 
   $effect(() => {
@@ -326,13 +330,13 @@
       const message = await action();
       if (message) flash(message);
     } catch (e) {
-      flash(`Operazione non riuscita: ${e}`, true);
+      flash(`${tr("Operazione non riuscita", "Operation failed")}: ${e}`, true);
     }
   }
 
   const NOTE_FILTERS = [
     { name: "Markdown", extensions: ["md"] },
-    { name: "Testo", extensions: ["txt"] },
+    { name: tr("Testo", "Text"), extensions: ["txt"] },
   ];
 
   function formatOf(path: string): "md" | "txt" {
@@ -344,11 +348,11 @@
     attempt(async () => {
       if (!selected) return null;
       await flushSave();
-      const name = (selected.title.trim() || "Nota").replace(/[<>:"/\\|?*]/g, "_");
+      const name = (selected.title.trim() || tr("Nota", "Note")).replace(/[<>:"/\\|?*]/g, "_");
       const path = await save({ defaultPath: `${name}.md`, filters: NOTE_FILTERS });
       if (!path) return null;
       await invoke("export_combined", { ids: [selected.id], path, format: formatOf(path) });
-      return `Esportata in ${path}`;
+      return `${tr("Esportata in", "Exported to")} ${path}`;
     });
   }
 
@@ -357,10 +361,10 @@
     attempt(async () => {
       if (ids.length === 0) return null;
       await flushSave();
-      const dir = await open({ directory: true, title: "Cartella in cui esportare le note" });
+      const dir = await open({ directory: true, title: tr("Cartella in cui esportare le note", "Folder to export the notes to") });
       if (typeof dir !== "string") return null;
       const count = await invoke<number>("export_notes", { ids, dir, format: "md" });
-      return `${count} ${count === 1 ? "nota esportata" : "note esportate"} in ${dir}`;
+      return `${plural(count, ["nota esportata", "note esportate"], ["note exported", "notes exported"])} ${tr("in", "to")} ${dir}`;
     });
   }
 
@@ -369,10 +373,10 @@
     attempt(async () => {
       if (ids.length === 0) return null;
       await flushSave();
-      const path = await save({ defaultPath: "Note.md", filters: NOTE_FILTERS });
+      const path = await save({ defaultPath: `${tr("Note", "Notes")}.md`, filters: NOTE_FILTERS });
       if (!path) return null;
       await invoke("export_combined", { ids, path, format: formatOf(path) });
-      return `${ids.length} note esportate in ${path}`;
+      return `${plural(ids.length, ["nota esportata", "note esportate"], ["note exported", "notes exported"])} ${tr("in", "to")} ${path}`;
     });
   }
 
@@ -385,13 +389,13 @@
     attempt(async () => {
       const paths = await open({
         multiple: true,
-        title: "Note da importare",
-        filters: [{ name: "Note", extensions: ["md", "markdown", "txt"] }],
+        title: tr("Note da importare", "Notes to import"),
+        filters: [{ name: tr("Note", "Notes"), extensions: ["md", "markdown", "txt"] }],
       });
       if (!paths || paths.length === 0) return null;
       const count = await invoke<number>("import_files", { paths });
       await reload();
-      return `${count} ${count === 1 ? "nota importata" : "note importate"}`;
+      return plural(count, ["nota importata", "note importate"], ["note imported", "notes imported"]);
     });
   }
 
@@ -503,10 +507,10 @@
         bind:value={query}
         oninput={onSearchInput}
         onkeydown={onSearchKeydown}
-        placeholder="Cerca nelle note…"
+        placeholder={tr("Cerca nelle note…", "Search your notes…")}
         spellcheck="false"
       />
-      <span class="count">{notes.length} {notes.length === 1 ? "nota" : "note"}</span>
+      <span class="count">{plural(notes.length, ["nota", "note"], ["note", "notes"])}</span>
     </div>
 
     <div class="toolbar">
@@ -524,10 +528,10 @@
           onclick={emptyTrash}
           disabled={notes.length === 0}
         >
-          {confirmEmpty ? "Conferma" : "Svuota"}
+          {confirmEmpty ? tr("Conferma", "Confirm") : tr("Svuota", "Empty")}
         </button>
       {:else}
-        <button class="new" onclick={newNote} title="Nuova nota (Ctrl+N)">+ Nuova</button>
+        <button class="new" onclick={newNote} title={tr("Nuova nota (Ctrl+N)", "New note (Ctrl+N)")}>{tr("+ Nuova", "+ New")}</button>
       {/if}
     </div>
 
@@ -536,32 +540,32 @@
         <label class="check">
           <input type="checkbox" checked={allChecked} onchange={toggleAll} />
         </label>
-        <span>{checked.length} {checked.length === 1 ? "selezionata" : "selezionate"}</span>
+        <span>{plural(checked.length, ["selezionata", "selezionate"], ["selected", "selected"])}</span>
         <span class="spacer"></span>
         {#if inTrash}
-          <button onclick={restoreFromTrash}>Ripristina</button>
+          <button onclick={restoreFromTrash}>{tr("Ripristina", "Restore")}</button>
           <button class="danger" class:confirm={confirmDelete} onclick={deleteTargets}>
-            {confirmDelete ? "Conferma" : "Elimina per sempre"}
+            {confirmDelete ? tr("Conferma", "Confirm") : tr("Elimina per sempre", "Delete forever")}
           </button>
         {:else}
           <select
             class="move"
-            aria-label="Sposta in una cartella"
+            aria-label={tr("Sposta in una cartella", "Move to a folder")}
             onchange={(e) => {
               const value = e.currentTarget.value;
               e.currentTarget.value = "";
               moveToFolder(checked, value === "none" ? null : Number(value));
             }}
           >
-            <option value="" disabled selected>Sposta in…</option>
-            <option value="none">Senza cartella</option>
+            <option value="" disabled selected>{tr("Sposta in…", "Move to…")}</option>
+            <option value="none">{tr("Senza cartella", "No folder")}</option>
             {#each folders as f (f.id)}
               <option value={f.id}>{f.name}</option>
             {/each}
           </select>
           <select
             class="move"
-            aria-label="Esporta le note selezionate"
+            aria-label={tr("Esporta le note selezionate", "Export the selected notes")}
             onchange={(e) => {
               const how = e.currentTarget.value;
               e.currentTarget.value = "";
@@ -569,13 +573,13 @@
               else if (how === "file") exportToSingleFile(checked);
             }}
           >
-            <option value="" disabled selected>Esporta…</option>
-            <option value="folder">Un file per nota…</option>
-            <option value="file">Tutte in un file…</option>
+            <option value="" disabled selected>{tr("Esporta…", "Export…")}</option>
+            <option value="folder">{tr("Un file per nota…", "One file per note…")}</option>
+            <option value="file">{tr("Tutte in un file…", "All in one file…")}</option>
           </select>
-          <button onclick={() => setArchived(true)}>Archivia</button>
-          <button onclick={() => setArchived(false)}>Ripristina</button>
-          <button class="danger" onclick={deleteTargets}>Elimina</button>
+          <button onclick={() => setArchived(true)}>{tr("Archivia", "Archive")}</button>
+          <button onclick={() => setArchived(false)}>{tr("Ripristina", "Restore")}</button>
+          <button class="danger" onclick={deleteTargets}>{tr("Elimina", "Delete")}</button>
         {/if}
       </div>
     {/if}
@@ -591,14 +595,14 @@
             <span class="text">
               <span class="title">
                 {#if note.pinned}
-                  <svg class="pin-icon" viewBox="0 0 20 20" aria-label="Fissata"><path d="M7.5 2.5h5l-.8 4.2 2.8 2.8v1.5H5.5V9.5l2.8-2.8-.8-4.2ZM10 11v6.5" /></svg>
+                  <svg class="pin-icon" viewBox="0 0 20 20" aria-label={tr("Fissata", "Pinned")}><path d="M7.5 2.5h5l-.8 4.2 2.8 2.8v1.5H5.5V9.5l2.8-2.8-.8-4.2ZM10 11v6.5" /></svg>
                 {/if}
                 {#if note.locked}
-                  <svg class="pin-icon" viewBox="0 0 20 20" aria-label="Protetta con PIN">
+                  <svg class="pin-icon" viewBox="0 0 20 20" aria-label={tr("Protetta con PIN", "Protected with PIN")}>
                     <rect x="4.5" y="9" width="11" height="8" rx="2.2" /><path d="M6.5 9V6.5a3.5 3.5 0 0 1 7 0V9" />
                   </svg>
                 {/if}
-                {note.title || "Senza titolo"}
+                {note.title || tr("Senza titolo", "Untitled")}
               </span>
               <span class="preview">
                 {#if checklistProgress(note.body)}
@@ -612,9 +616,9 @@
             </span>
             <span class="meta">
               {#if note.deleted_at !== null}
-                <span class="badge off">Cestino</span>
+                <span class="badge off">{tr("Cestino", "Trash")}</span>
               {:else}
-                <span class="badge" class:off={note.archived}>{note.archived ? "Archiviata" : "Attiva"}</span>
+                <span class="badge" class:off={note.archived}>{note.archived ? tr("Archiviata", "Archived") : tr("Attiva", "Active")}</span>
               {/if}
               {#if note.remind_at !== null && note.deleted_at === null}
                 <span class="remind" class:overdue={isOverdue(note, clock.now)}>
@@ -632,17 +636,17 @@
       {:else}
         <li class="empty">
           {#if query}
-            Nessuna nota trovata per “{query}”.
+            {tr("Nessuna nota trovata per", "No notes found for")} “{query}”.
           {:else if tag}
-            Nessuna nota con #{tag} qui.
+            {tr("Nessuna nota con", "No notes with")} #{tag} {tr("qui.", "here.")}
           {:else if folder !== null}
-            Nessuna nota in questa cartella.
+            {tr("Nessuna nota in questa cartella.", "No notes in this folder.")}
           {:else if filter === "archived"}
-            L'archivio è vuoto.
+            {tr("L'archivio è vuoto.", "The archive is empty.")}
           {:else if inTrash}
-            Il cestino è vuoto.
+            {tr("Il cestino è vuoto.", "The trash is empty.")}
           {:else}
-            Nessuna nota. Creane una con <b>+ Nuova</b>.
+            {tr("Nessuna nota. Creane una con", "No notes. Create one with")} <b>{tr("+ Nuova", "+ New")}</b>.
           {/if}
         </li>
       {/each}
@@ -658,21 +662,21 @@
             <div class="status">
               <span class="dot"></span>
               {#if selected.deleted_at !== null}
-                Nel cestino
+                {tr("Nel cestino", "In the trash")}
               {:else}
                 {#if selected.archived}
-                  Archiviata
+                  {tr("Archiviata", "Archived")}
                 {:else}
-                  Attiva · nel deck
+                  {tr("Attiva · nel deck", "Active · in the deck")}
                 {/if}
                 <select
                   class="folder-select"
-                  aria-label="Cartella"
+                  aria-label={tr("Cartella", "Folder")}
                   value={selected.folder_id ?? ""}
                   onchange={(e) =>
                     moveToFolder([selected!.id], e.currentTarget.value === "" ? null : Number(e.currentTarget.value))}
                 >
-                  <option value="">Senza cartella</option>
+                  <option value="">{tr("Senza cartella", "No folder")}</option>
                   {#each folders as f (f.id)}
                     <option value={f.id}>{f.name}</option>
                   {/each}
@@ -681,22 +685,22 @@
             </div>
             <div class="actions">
               {#if selected.deleted_at !== null}
-                <button onclick={restoreFromTrash} disabled={checked.length > 0}>Ripristina</button>
+                <button onclick={restoreFromTrash} disabled={checked.length > 0}>{tr("Ripristina", "Restore")}</button>
                 <button
                   class="danger"
                   class:confirm={confirmDelete}
                   onclick={deleteTargets}
                   disabled={checked.length > 0}
                 >
-                  {confirmDelete ? "Conferma eliminazione" : "Elimina per sempre"}
+                  {confirmDelete ? tr("Conferma eliminazione", "Confirm deletion") : tr("Elimina per sempre", "Delete forever")}
                 </button>
               {:else}
                 <button
                   class="icon-btn"
                   onmousedown={(e) => e.preventDefault()}
                   onclick={() => editor?.toggleChecklist()}
-                  aria-label="Casella da spuntare"
-                  title="Casella da spuntare (Ctrl+L)"
+                  aria-label={tr("Casella da spuntare", "Checkbox")}
+                  title={tr("Casella da spuntare (Ctrl+L)", "Checkbox (Ctrl+L)")}
                 >
                   <svg viewBox="0 0 20 20" aria-hidden="true">
               <rect x="3" y="3" width="14" height="14" rx="3.5" />
@@ -708,8 +712,8 @@
                   class:on={selected.pinned}
                   onclick={togglePin}
                   aria-pressed={selected.pinned}
-                  aria-label="Fissa in alto"
-                  title={selected.pinned ? "Togli dalla cima" : "Fissa in alto"}
+                  aria-label={tr("Fissa in alto", "Pin to top")}
+                  title={selected.pinned ? tr("Togli dalla cima", "Unpin") : tr("Fissa in alto", "Pin to top")}
                 >
                   <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M7.5 2.5h5l-.8 4.2 2.8 2.8v1.5H5.5V9.5l2.8-2.8-.8-4.2ZM10 11v6.5" /></svg>
                 </button>
@@ -718,8 +722,8 @@
                   class:on={showVersions}
                   onclick={() => (showVersions = !showVersions)}
                   aria-pressed={showVersions}
-                  aria-label="Cronologia"
-                  title="Cronologia delle versioni"
+                  aria-label={tr("Cronologia", "History")}
+                  title={tr("Cronologia delle versioni", "Version history")}
                 >
                   <svg viewBox="0 0 20 20" aria-hidden="true">
                     <path d="M3.5 10a6.5 6.5 0 1 0 1.9-4.6M3.5 3.5v2.4h2.4M10 6.5V10l2.5 1.8" />
@@ -740,17 +744,17 @@
                 />
                 <ColorPicker color={selected.color} onpick={setColor} />
                 {#if selected.archived}
-                  <button onclick={() => setArchived(false)} disabled={checked.length > 0}>Ripristina</button>
+                  <button onclick={() => setArchived(false)} disabled={checked.length > 0}>{tr("Ripristina", "Restore")}</button>
                 {:else}
-                  <button onclick={() => setArchived(true)} disabled={checked.length > 0} title="Sposta la nota nell'archivio">
-                    ✓ Segna completata
+                  <button onclick={() => setArchived(true)} disabled={checked.length > 0} title={tr("Sposta la nota nell'archivio", "Move the note to the archive")}>
+                    {tr("✓ Segna completata", "✓ Mark as done")}
                   </button>
                 {/if}
-                <button onclick={exportSelected} disabled={checked.length > 0} title="Salva la nota come file .md o .txt">
-                  Esporta…
+                <button onclick={exportSelected} disabled={checked.length > 0} title={tr("Salva la nota come file .md o .txt", "Save the note as a .md or .txt file")}>
+                  {tr("Esporta…", "Export…")}
                 </button>
-                <button class="danger" onclick={deleteTargets} disabled={checked.length > 0} title="Sposta nel cestino">
-                  Elimina
+                <button class="danger" onclick={deleteTargets} disabled={checked.length > 0} title={tr("Sposta nel cestino", "Move to the trash")}>
+                  {tr("Elimina", "Delete")}
                 </button>
               {/if}
             </div>
@@ -764,7 +768,7 @@
             {:else}
               <input
                 class="title"
-                placeholder="Titolo"
+                placeholder={tr("Titolo", "Title")}
                 bind:this={titleInput}
                 bind:value={shown.title}
                 oninput={scheduleSave}
@@ -786,21 +790,21 @@
           </div>
           {#if backlinks.length > 0}
             <div class="backlinks">
-              <span>Citata in</span>
+              <span>{tr("Citata in", "Mentioned in")}</span>
               {#each backlinks as link (link.id)}
-                <button onclick={() => showNote(link.id)}>{link.title || "Senza titolo"}</button>
+                <button onclick={() => showNote(link.id)}>{link.title || tr("Senza titolo", "Untitled")}</button>
               {/each}
             </div>
           {/if}
           <footer>
-            <span>Creata il {fullDate(selected.created_at)}</span>
+            <span>{tr("Creata il", "Created on")} {fullDate(selected.created_at)}</span>
             {#if selected.deleted_at !== null}
               <span>
-                Nel cestino · eliminata per sempre tra {daysLeft(selected)}
-                {daysLeft(selected) === 1 ? "giorno" : "giorni"}
+                {tr("Nel cestino · eliminata per sempre tra", "In the trash · deleted forever in")}
+                {plural(daysLeft(selected), ["giorno", "giorni"], ["day", "days"])}
               </span>
             {:else}
-              <span>Modificata il {fullDate(selected.updated_at)}</span>
+              <span>{tr("Modificata il", "Edited on")} {fullDate(selected.updated_at)}</span>
             {/if}
           </footer>
         </article>
@@ -817,7 +821,7 @@
         {/if}
       {/key}
     {:else}
-      <div class="placeholder">Seleziona una nota</div>
+      <div class="placeholder">{tr("Seleziona una nota", "Select a note")}</div>
     {/if}
   </main>
 
@@ -828,7 +832,7 @@
   {#if notice}
     <div class="notice" class:error={notice.error} role="status">
       <span>{notice.text}</span>
-      <button onclick={() => (notice = null)} aria-label="Chiudi">✕</button>
+      <button onclick={() => (notice = null)} aria-label={tr("Chiudi", "Close")}>✕</button>
     </div>
   {/if}
 </div>

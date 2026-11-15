@@ -1,6 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { COLORS } from "$lib/notes";
+import { tr } from "$lib/i18n";
 
 /** Stesse chiavi di `Settings` in src-tauri/src/settings.rs. */
 export type Settings = {
@@ -55,6 +56,8 @@ export type Settings = {
   sync_key: string | null;
   /** Cartelle di note condivise con altre persone. Sola lettura. */
   shares: { folder_uid: string; dir: string }[];
+  /** Lingua: "auto" (quella di Windows), "it" o "en". */
+  language: "auto" | "it" | "en";
 };
 
 /** Vero se è già stato impostato un PIN globale per le note protette. */
@@ -63,9 +66,9 @@ export function hasPin(s: Settings = settings): boolean {
 }
 
 export const FONTS: Record<Settings["editor_font"], { label: string; css: string }> = {
-  hand: { label: "A mano (Segoe Print)", css: '"Segoe Print", "Segoe UI", cursive' },
-  sans: { label: "Normale (Segoe UI)", css: '"Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif' },
-  mono: { label: "Monospazio (Cascadia)", css: '"Cascadia Mono", Consolas, monospace' },
+  hand: { get label() { return tr("A mano (Segoe Print)", "Handwritten (Segoe Print)"); }, css: '"Segoe Print", "Segoe UI", cursive' },
+  sans: { get label() { return tr("Normale (Segoe UI)", "Normal (Segoe UI)"); }, css: '"Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif' },
+  mono: { get label() { return tr("Monospazio (Cascadia)", "Monospaced (Cascadia)"); }, css: '"Cascadia Mono", Consolas, monospace' },
 };
 
 /** Valori reattivi, aggiornati quando un'altra finestra salva. */
@@ -100,6 +103,7 @@ export const settings = $state<Settings>({
   device_id: "",
   sync_key: null,
   shares: [],
+  language: "auto",
 });
 
 /** "09:00" → ore e minuti. */

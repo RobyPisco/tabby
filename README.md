@@ -31,6 +31,7 @@ L'installer non è ancora firmato: se Windows mostra "App non riconosciuta", sce
 - **Timer / pomodoro** su una nota: 25 min di concentrazione, pausa, durata a scelta; il tempo rimasto appare sulla linguetta e alla fine arriva una notifica con "Pausa" / "Altri 25 min".
 - **Sincronizzazione tra PC** (facoltativa): scegli la stessa cartella di Google Drive, OneDrive o Dropbox su ogni PC e Tabby tiene le stesse note ovunque, senza server né account. Se una nota cambia su due PC, vince la modifica più recente e l'altra resta nella cronologia.
 - **Cifratura** facoltativa della cartella condivisa con una frase segreta; **copie leggibili dal telefono** (un `.md` per nota nella cartella di Drive); **liste condivise** con altre persone (es. la spesa con la famiglia) tramite una cartella cloud condivisa con loro.
+- **Italiano e inglese**: segue la lingua di Windows, o si sceglie nelle impostazioni.
 - **Cerca ovunque** con `Ctrl+Alt+F`: barra al centro dello schermo, Invio apre la nota.
 - **Backup automatico** giornaliero di note, immagini e impostazioni in una cartella a scelta (meglio su un altro disco o in OneDrive), con ripristino dalle impostazioni.
 - **Cattura rapida** degli appunti, **export** (Markdown/testo, un file per nota o file unico) e **import**.

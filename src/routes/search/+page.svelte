@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { tr } from "$lib/i18n";
   import { invoke } from "@tauri-apps/api/core";
   import { listen } from "@tauri-apps/api/event";
   import { getCurrentWindow } from "@tauri-apps/api/window";
@@ -85,32 +86,32 @@
       bind:this={input}
       bind:value={query}
       oninput={search}
-      placeholder="Cerca nelle note…"
-      aria-label="Cerca nelle note"
+      placeholder={tr("Cerca nelle note…", "Search your notes…")}
+      aria-label={tr("Cerca nelle note", "Search your notes")}
       autofocus
       spellcheck="false"
     />
     <kbd>Esc</kbd>
   </div>
   {#if results.length > 0}
-    <ul role="listbox" aria-label="Risultati">
+    <ul role="listbox" aria-label={tr("Risultati", "Results")}>
       {#each results as note, i (note.id)}
         <li role="option" aria-selected={i === active}>
           <button class:on={i === active} onmouseenter={() => (active = i)} onclick={() => openNote(note)}>
             <span class="bar" style:background={vivid(note.color)}></span>
             <span class="text">
-              <span class="title">{note.locked ? "🔒 " : ""}{note.title || "Senza titolo"}</span>
+              <span class="title">{note.locked ? "🔒 " : ""}{note.title || tr("Senza titolo", "Untitled")}</span>
               {#if !note.locked}<span class="preview">{previewLine(note.body)}</span>{/if}
             </span>
-            <span class="meta">{note.archived ? "Archiviata · " : ""}{relativeTime(note.updated_at)}</span>
+            <span class="meta">{note.archived ? tr("Archiviata · ", "Archived · ") : ""}{relativeTime(note.updated_at)}</span>
           </button>
         </li>
       {/each}
     </ul>
   {:else}
-    <p class="empty">{query.trim() ? "Nessuna nota trovata" : "Nessuna nota"}</p>
+    <p class="empty">{query.trim() ? tr("Nessuna nota trovata", "No notes found") : tr("Nessuna nota", "No notes")}</p>
   {/if}
-  <p class="hint">↑ ↓ per scegliere · Invio per aprire</p>
+  <p class="hint">{tr("↑ ↓ per scegliere · Invio per aprire", "↑ ↓ to choose · Enter to open")}</p>
 </div>
 
 <style>

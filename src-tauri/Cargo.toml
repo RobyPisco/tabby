@@ -1,6 +1,6 @@
 [package]
 name = "tabby"
-version = "1.4.8"
+version = "1.5.0"
 description = "Tabby: sticky notes ancorate al bordo dello schermo"
 authors = ["Roberto Pisco Pisconti"]
 license = "MIT"

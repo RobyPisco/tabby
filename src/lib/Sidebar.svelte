@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { tr } from "$lib/i18n";
   import { invoke } from "@tauri-apps/api/core";
   import { tick } from "svelte";
   import type { Folder, FolderCounts, TagCount } from "$lib/notes";
@@ -113,22 +114,22 @@
       bind:value={draft}
       onkeydown={onInputKeydown}
       onblur={commit}
-      placeholder="Nome della cartella"
+      placeholder={tr("Nome della cartella", "Folder name")}
       maxlength="60"
     />
     {#if error}<span class="error">{error}</span>{/if}
   </li>
 {/snippet}
 
-<nav class="sidebar" aria-label="Cartelle e tag">
+<nav class="sidebar" aria-label={tr("Cartelle e tag", "Folders and tags")}>
   <div class="heading">
-    <span>Cartelle</span>
-    <button class="add" onclick={() => startEditing("new")} title="Nuova cartella" aria-label="Nuova cartella">+</button>
+    <span>{tr("Cartelle", "Folders")}</span>
+    <button class="add" onclick={() => startEditing("new")} title={tr("Nuova cartella", "New folder")} aria-label={tr("Nuova cartella", "New folder")}>+</button>
   </div>
   <ul>
     <li>
       <button class="item" class:on={folder === null} onclick={() => pickFolder(null)}>
-        <span class="name">Tutte le note</span>
+        <span class="name">{tr("Tutte le note", "All notes")}</span>
         <span class="count">{counts.all}</span>
       </button>
     </li>
@@ -138,9 +139,9 @@
           class="item"
           class:on={folder === 0}
           onclick={() => pickFolder(0)}
-          title="Le note che non hai messo in nessuna cartella"
+          title={tr("Le note che non hai messo in nessuna cartella", "Notes you haven't put in any folder")}
         >
-          <span class="name">Senza cartella</span>
+          <span class="name">{tr("Senza cartella", "No folder")}</span>
           <span class="count">{counts.unfiled}</span>
         </button>
       </li>
@@ -155,7 +156,7 @@
             class:on={folder === f.id}
             onclick={() => pickFolder(f.id)}
             ondblclick={() => startEditing(f.id, f.name)}
-            title="Doppio clic per rinominare"
+            title={tr("Doppio clic per rinominare", "Double-click to rename")}
           >
             <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M2.5 5.5a1.5 1.5 0 0 1 1.5-1.5h3.6l1.8 2h6.6a1.5 1.5 0 0 1 1.5 1.5v7a1.5 1.5 0 0 1-1.5 1.5H4a1.5 1.5 0 0 1-1.5-1.5Z" /></svg>
             <span class="name">{f.name}</span>
@@ -165,10 +166,10 @@
             class="delete"
             class:confirm={confirmDeleteId === f.id}
             onclick={() => remove(f.id)}
-            title="Elimina la cartella (le note restano)"
-            aria-label="Elimina la cartella {f.name}"
+            title={tr("Elimina la cartella (le note restano)", "Delete the folder (the notes stay)")}
+            aria-label={`${tr("Elimina la cartella", "Delete the folder")} ${f.name}`}
           >
-            {confirmDeleteId === f.id ? "Elimina?" : "✕"}
+            {confirmDeleteId === f.id ? tr("Elimina?", "Delete?") : "✕"}
           </button>
         </li>
       {/if}
@@ -180,7 +181,7 @@
 
   <div class="heading"><span>Tag</span></div>
   {#if tags.length === 0}
-    <p class="hint">Scrivi <b>#parola</b> in una nota per creare un tag.</p>
+    <p class="hint">{tr("Scrivi", "Write")} <b>#{tr("parola", "word")}</b> {tr("in una nota per creare un tag.", "in a note to create a tag.")}</p>
   {:else}
     <div class="tags">
       {#each tags as t (t.tag)}
@@ -194,18 +195,18 @@
   <div class="footer">
     <button class="item" onclick={onimport}>
       <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 3v9m0 0-3.5-3.5M10 12l3.5-3.5M4 14v2.5h12V14" /></svg>
-      <span class="name">Importa…</span>
+      <span class="name">{tr("Importa…", "Import…")}</span>
     </button>
     <button class="item" onclick={onexportall}>
       <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 12V3m0 0L6.5 6.5M10 3l3.5 3.5M4 14v2.5h12V14" /></svg>
-      <span class="name">Esporta tutto…</span>
+      <span class="name">{tr("Esporta tutto…", "Export all…")}</span>
     </button>
     <button class="item" onclick={onsettings}>
       <svg viewBox="0 0 20 20" aria-hidden="true">
         <circle cx="10" cy="10" r="2.6" />
         <path d="M10 2.5v2M10 15.5v2M17.5 10h-2M4.5 10h-2M15.3 4.7l-1.4 1.4M6.1 13.9l-1.4 1.4M15.3 15.3l-1.4-1.4M6.1 6.1 4.7 4.7" />
       </svg>
-      <span class="name">Impostazioni</span>
+      <span class="name">{tr("Impostazioni", "Settings")}</span>
     </button>
   </div>
 </nav>

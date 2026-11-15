@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { tr } from "$lib/i18n";
   import { invoke } from "@tauri-apps/api/core";
   import { hasPin, settings } from "$lib/settings.svelte";
   import type { Note } from "$lib/notes";
@@ -42,7 +43,7 @@
   async function confirmNewPin() {
     error = "";
     if (newPin !== newPinConfirm) {
-      error = "I due PIN non coincidono";
+      error = tr("I due PIN non coincidono", "The two PINs don't match");
       return;
     }
     try {
@@ -71,13 +72,13 @@
     onmousedown={(e) => e.preventDefault()}
     onclick={toggle}
     aria-pressed={note.locked}
-    aria-label="Proteggi con PIN"
+    aria-label={tr("Proteggi con PIN", "Protect with PIN")}
     disabled={note.locked && !unlocked}
     title={note.locked
       ? unlocked
-        ? "Togli la protezione"
-        : "Sblocca la nota per togliere la protezione"
-      : "Proteggi con PIN"}
+        ? tr("Togli la protezione", "Remove protection")
+        : tr("Sblocca la nota per togliere la protezione", "Unlock the note to remove protection")
+      : tr("Proteggi con PIN", "Protect with PIN")}
   >
     <svg viewBox="0 0 20 20" aria-hidden="true">
       <rect x="4.5" y="9" width="11" height="8" rx="2.2" />
@@ -87,14 +88,14 @@
 
   {#if settingPin}
     <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
-    <div class="panel" role="dialog" aria-label="Imposta un PIN">
-      <p class="hint">Imposta un PIN (4-6 cifre) per proteggere le note.</p>
+    <div class="panel" role="dialog" aria-label={tr("Imposta un PIN", "Set a PIN")}>
+      <p class="hint">{tr("Imposta un PIN (4-6 cifre) per proteggere le note.", "Set a PIN (4-6 digits) to protect your notes.")}</p>
       <input type="password" inputmode="numeric" maxlength="6" placeholder="PIN" bind:value={newPin} />
-      <input type="password" inputmode="numeric" maxlength="6" placeholder="Conferma PIN" bind:value={newPinConfirm} />
+      <input type="password" inputmode="numeric" maxlength="6" placeholder={tr("Conferma PIN", "Confirm PIN")} bind:value={newPinConfirm} />
       {#if error}<p class="error">{error}</p>{/if}
       <div class="row">
-        <button class="primary" onclick={confirmNewPin}>Imposta e proteggi</button>
-        <button onclick={() => (settingPin = false)}>Annulla</button>
+        <button class="primary" onclick={confirmNewPin}>{tr("Imposta e proteggi", "Set and protect")}</button>
+        <button onclick={() => (settingPin = false)}>{tr("Annulla", "Cancel")}</button>
       </div>
     </div>
   {/if}

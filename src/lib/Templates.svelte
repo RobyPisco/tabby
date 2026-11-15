@@ -1,12 +1,13 @@
 <script lang="ts">
-  import { TEMPLATES, type Template } from "$lib/notes";
+  import { templates, type Template } from "$lib/notes";
+  import { tr } from "$lib/i18n";
 
   let { onpick }: { onpick: (template: Template) => void } = $props();
 </script>
 
 <div class="templates">
-  <span>Modelli</span>
-  {#each TEMPLATES as template (template.label)}
+  <span>{tr("Modelli", "Templates")}</span>
+  {#each templates() as template (template.label)}
     <!-- mousedown: il pulsante non ruba il focus, così la nota resta aperta -->
     <button onmousedown={(e) => e.preventDefault()} onclick={() => onpick(template)}>{template.label}</button>
   {/each}

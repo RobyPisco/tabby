@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { tr } from "$lib/i18n";
   import { invoke } from "@tauri-apps/api/core";
   import { listen } from "@tauri-apps/api/event";
   import { getVersion } from "@tauri-apps/api/app";
@@ -503,12 +504,12 @@
         style:top="{i * (tabHeight + TAB_GAP)}px"
         style:transition-delay="{phase === "rest" ? 0 : i * STAGGER_MS}ms"
         onclick={() => openNoteById(note.id)}
-        aria-label={note.title || "Senza titolo"}
+        aria-label={note.title || tr("Senza titolo", "Untitled")}
       >
         <span class="dot"></span>
-        <span class="label">{note.title || "Senza titolo"}</span>
+        <span class="label">{note.title || tr("Senza titolo", "Untitled")}</span>
         {#if note.locked}
-          <svg class="tab-lock" viewBox="0 0 20 20" aria-hidden="true" aria-label="Protetta con PIN">
+          <svg class="tab-lock" viewBox="0 0 20 20" aria-hidden="true" aria-label={tr("Protetta con PIN", "Protected with PIN")}>
             <rect x="4.5" y="9" width="11" height="8" rx="2.2" /><path d="M6.5 9V6.5a3.5 3.5 0 0 1 7 0V9" />
           </svg>
         {/if}
@@ -530,15 +531,15 @@
       class:shown={phase !== "rest"}
       style:top="{deckHeight + 12}px"
       onclick={() => addNote()}
-      aria-label="Nuova nota"
+      aria-label={tr("Nuova nota", "New note")}
     >+</button>
     <button
       class="add all"
       class:shown={phase !== "rest"}
       style:top="{deckHeight + 44}px"
       onclick={() => invoke("show_all_notes")}
-      aria-label="Tutte le note"
-      title="Tutte le note (Ctrl+Alt+L)"
+      aria-label={tr("Tutte le note", "All notes")}
+      title={tr("Tutte le note (Ctrl+Alt+L)", "All notes (Ctrl+Alt+L)")}
     >☰</button>
   </div>
 
@@ -560,8 +561,8 @@
             class="icon-btn"
             onmousedown={(e) => e.preventDefault()}
             onclick={() => editor?.toggleChecklist()}
-            aria-label="Casella da spuntare"
-            title="Casella da spuntare (Ctrl+L)"
+            aria-label={tr("Casella da spuntare", "Checkbox")}
+            title={tr("Casella da spuntare (Ctrl+L)", "Checkbox (Ctrl+L)")}
           >
             <svg viewBox="0 0 20 20" aria-hidden="true">
               <rect x="3" y="3" width="14" height="14" rx="3.5" />
@@ -574,8 +575,8 @@
             onmousedown={(e) => e.preventDefault()}
             onclick={togglePin}
             aria-pressed={openNote.pinned}
-            aria-label="Fissa in alto"
-            title={openNote.pinned ? "Togli dalla cima" : "Fissa in alto"}
+            aria-label={tr("Fissa in alto", "Pin to top")}
+            title={openNote.pinned ? tr("Togli dalla cima", "Unpin") : tr("Fissa in alto", "Pin to top")}
           >
             <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M7.5 2.5h5l-.8 4.2 2.8 2.8v1.5H5.5V9.5l2.8-2.8-.8-4.2ZM10 11v6.5" /></svg>
           </button>
@@ -594,7 +595,7 @@
             bind:open={reminderOpen}
           />
           <ColorPicker color={openNote.color} onpick={setColor} />
-          <button class="archive" onclick={archiveOpen} title="Archivia">Archivia</button>
+          <button class="archive" onclick={archiveOpen} title={tr("Archivia", "Archive")}>{tr("Archivia", "Archive")}</button>
         </header>
         {#if locked}
           <LockedContent noteId={openNote.id} onunlocked={(real) => (unlockedNote = real)} />
@@ -602,7 +603,7 @@
           <textarea
             class="title"
             rows="1"
-            placeholder="Titolo"
+            placeholder={tr("Titolo", "Title")}
             bind:this={titleInput}
             bind:value={shownNote.title}
             oninput={onTitleInput}

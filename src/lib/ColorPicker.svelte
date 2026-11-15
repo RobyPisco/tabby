@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { tr } from "$lib/i18n";
   import { COLOR_NAMES, COLORS, vivid } from "$lib/notes";
 
   let { color, onpick }: { color: string; onpick: (color: string) => void } = $props();
@@ -25,8 +26,8 @@
     onclick={() => (open = !open)}
     aria-haspopup="true"
     aria-expanded={open}
-    aria-label="Colore della nota"
-    title="Colore"
+    aria-label={tr("Colore della nota", "Note colour")}
+    title={tr("Colore", "Colour")}
   ></button>
   {#if open}
     <div class="swatches" role="menu">
