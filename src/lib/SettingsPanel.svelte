@@ -17,7 +17,25 @@
 
   type MonitorInfo = { name: string; label: string };
   type DeviceInfo = { name: string; seen_at: number; this_pc: boolean };
-  type SyncStatus = { dir: string | null; last_sync: number | null; last_error: string | null; devices: DeviceInfo[] };
+  type ShareStatus = {
+    folder_uid: string;
+    name: string;
+    dir: string;
+    last_sync: number | null;
+    last_error: string | null;
+    devices: DeviceInfo[];
+  };
+  type SyncStatus = {
+    dir: string | null;
+    last_sync: number | null;
+    last_error: string | null;
+    devices: DeviceInfo[];
+    encrypted: boolean;
+    needs_passphrase: boolean;
+    phone_copy: boolean;
+    shares: ShareStatus[];
+  };
+  type FolderInfo = { id: number; name: string; count: number };
 
   let monitors = $state<MonitorInfo[]>([]);
   let autostart = $state(false);
@@ -27,8 +45,24 @@
   let updateStatus = $state<"" | "checking" | "latest" | "failed">("");
   let dialog = $state<HTMLElement>();
   // Sincronizzazione tra PC
-  let syncStatus = $state<SyncStatus>({ dir: null, last_sync: null, last_error: null, devices: [] });
+  let syncStatus = $state<SyncStatus>({
+    dir: null,
+    last_sync: null,
+    last_error: null,
+    devices: [],
+    encrypted: false,
+    needs_passphrase: false,
+    phone_copy: true,
+    shares: [],
+  });
   let syncConfirmOff = $state(false);
+  let passphrase = $state("");
+  let passphraseOpen = $state(false);
+  let passphraseBusy = $state(false);
+  let confirmDecrypt = $state(false);
+  let folders = $state<FolderInfo[]>([]);
+  let shareFolderId = $state<number | null>(null);
+  let confirmLeave = $state<string | null>(null);
   // Non disturbare: fine del silenzio in corso (manuale o fascia oraria).
   let quietUntil = $state<number | null>(null);
   // Backup
@@ -226,6 +260,88 @@
     }
   }
 
+  async function refreshSync() {
+    syncStatus = await invoke<SyncStatus>("sync_status");
+  }
+
+  async function savePassphrase() {
+    passphraseBusy = true;
+    error = "";
+    try {
+      await invoke("sync_set_passphrase", { passphrase });
+      passphrase = "";
+      passphraseOpen = false;
+      setTimeout(refreshSync, 1500);
+    } catch (e) {
+      error = `Frase segreta: ${e}`;
+    } finally {
+      passphraseBusy = false;
+    }
+  }
+
+  async function removeEncryption() {
+    if (!confirmDecrypt) {
+      confirmDecrypt = true;
+      return;
+    }
+    confirmDecrypt = false;
+    try {
+      await invoke("sync_remove_encryption");
+      setTimeout(refreshSync, 1500);
+    } catch (e) {
+      error = `Cifratura: ${e}`;
+    }
+  }
+
+  async function setPhoneCopy(enabled: boolean) {
+    try {
+      await invoke("sync_set_phone_copy", { enabled });
+      syncStatus.phone_copy = enabled;
+    } catch (e) {
+      error = `Copie per il telefono: ${e}`;
+    }
+  }
+
+  async function shareFolder() {
+    if (shareFolderId === null) return;
+    const dir = await openDialog({ directory: true, title: "Cartella di Drive (o OneDrive, Dropbox) da condividere con le altre persone" });
+    if (typeof dir !== "string") return;
+    error = "";
+    try {
+      await invoke<string>("share_folder", { folderId: shareFolderId, path: dir });
+      shareFolderId = null;
+      setTimeout(refreshSync, 1500);
+    } catch (e) {
+      error = `Lista condivisa: ${e}`;
+    }
+  }
+
+  async function joinShare() {
+    const dir = await openDialog({ directory: true, title: "Cartella che ti hanno condiviso" });
+    if (typeof dir !== "string") return;
+    error = "";
+    try {
+      await invoke<string>("share_join", { path: dir });
+      setTimeout(refreshSync, 1500);
+    } catch (e) {
+      error = `Lista condivisa: ${e}`;
+    }
+  }
+
+  async function leaveShare(uid: string) {
+    if (confirmLeave !== uid) {
+      confirmLeave = uid;
+      return;
+    }
+    confirmLeave = null;
+    try {
+      await invoke("share_leave", { folderUid: uid });
+      setTimeout(refreshSync, 500);
+    } catch (e) {
+      error = `Lista condivisa: ${e}`;
+    }
+  }
+
   /** "adesso", "5 min fa", "alle 18:20", "il 14/11". */
   function ago(unix: number): string {
     const secs = Math.floor(Date.now() / 1000) - unix;
@@ -279,7 +395,8 @@
     invoke<MonitorInfo[]>("list_monitors").then((list) => (monitors = list));
     invoke<boolean>("get_autostart").then((value) => (autostart = value));
     loadBackups();
-    invoke<SyncStatus>("sync_status").then((st) => (syncStatus = st));
+    refreshSync();
+    invoke<FolderInfo[]>("list_folders").then((list) => (folders = list));
     dialog?.focus();
     // Cambiato dal menu della tray mentre il pannello è aperto.
     const unlisten = listen("autostart-changed", async () => (autostart = await invoke<boolean>("get_autostart")));
@@ -616,6 +733,7 @@
           {/if}
         </div>
       {:else if tab === "sync"}
+        <h4>I tuoi PC</h4>
         {#if !settings.sync_dir}
           <div class="group">
             <p class="desc pad">
@@ -636,11 +754,13 @@
           <div class="group">
             <div class="row">
               <span class="path">
-                <strong>{syncStatus.last_error ? "⚠ Sincronizzazione ferma" : "✓ Sincronizzato"}</strong>
+                <strong>
+                  {syncStatus.needs_passphrase ? "🔑 Serve la frase segreta" : syncStatus.last_error ? "⚠ Sincronizzazione ferma" : "✓ Sincronizzato"}
+                </strong>
                 <small class="desc" title={settings.sync_dir}>{settings.sync_dir}</small>
-                {#if syncStatus.last_error}
+                {#if syncStatus.last_error && !syncStatus.needs_passphrase}
                   <small class="desc warn">{syncStatus.last_error}</small>
-                {:else if syncStatus.last_sync}
+                {:else if syncStatus.last_sync && !syncStatus.needs_passphrase}
                   <small class="desc">Ultimo controllo {ago(syncStatus.last_sync)} · le modifiche arrivano in pochi secondi</small>
                 {/if}
               </span>
@@ -649,17 +769,76 @@
                 <button class="plain" onclick={chooseSyncFolder}>Cambia…</button>
               </div>
             </div>
+            {#each syncStatus.devices as d (d.name + d.this_pc)}
+              <div class="row">
+                <span>💻 {d.name}{#if d.this_pc} <small class="value">(questo PC)</small>{/if}</span>
+                <small class="value">ultima modifica {ago(d.seen_at)}</small>
+              </div>
+            {/each}
           </div>
 
-          {#if syncStatus.devices.length > 0}
-            <h4>PC collegati</h4>
-            <div class="group">
-              {#each syncStatus.devices as d (d.name + d.this_pc)}
-                <div class="row">
-                  <span>{d.name}{#if d.this_pc} <small class="value">(questo PC)</small>{/if}</span>
-                  <small class="value">ultima modifica {ago(d.seen_at)}</small>
+          <h4>Cifratura</h4>
+          <div class="group">
+            {#if syncStatus.needs_passphrase || passphraseOpen}
+              <p class="desc pad">
+                {#if syncStatus.needs_passphrase}
+                  La cartella è cifrata da un altro PC: scrivi la stessa frase segreta per leggere e scrivere le note.
+                {:else}
+                  Scegli una frase segreta (almeno 8 caratteri) e scrivila uguale su tutti i PC. <strong>Se la dimentichi, le note
+                  nella cartella condivisa non si possono più leggere</strong> (quelle su ogni PC restano).
+                {/if}
+              </p>
+              <form class="row" onsubmit={(e) => { e.preventDefault(); savePassphrase(); }}>
+                <input
+                  class="passphrase"
+                  type="password"
+                  autocomplete="new-password"
+                  placeholder="Frase segreta"
+                  bind:value={passphrase}
+                />
+                <div class="buttons">
+                  {#if passphraseOpen && !syncStatus.needs_passphrase}
+                    <button type="button" class="plain" onclick={() => { passphraseOpen = false; passphrase = ""; }}>Annulla</button>
+                  {/if}
+                  <button class="plain primary" disabled={passphraseBusy || passphrase.trim().length < 8}>
+                    {passphraseBusy ? "Attendere…" : syncStatus.needs_passphrase ? "Sblocca" : "Cifra la cartella"}
+                  </button>
                 </div>
-              {/each}
+              </form>
+            {:else if syncStatus.encrypted}
+              <div class="row">
+                <span>
+                  🔒 Cifrata con la frase segreta
+                  <small class="desc">Su Drive ci sono solo dati illeggibili, anche per Google. Le copie per il telefono sono spente.</small>
+                </span>
+                <button class="plain" class:danger={confirmDecrypt} onclick={removeEncryption}>
+                  {confirmDecrypt ? "Conferma" : "Togli"}
+                </button>
+              </div>
+            {:else}
+              <div class="row">
+                <span>
+                  Non cifrata
+                  <small class="desc">Le note nella cartella condivisa sono leggibili da chi può aprirla (anche quelle col PIN).</small>
+                </span>
+                <button class="plain" onclick={() => (passphraseOpen = true)}>Cifra…</button>
+              </div>
+            {/if}
+          </div>
+
+          {#if !syncStatus.encrypted}
+            <h4>Sul telefono</h4>
+            <div class="group">
+              <label class="row check">
+                <span>
+                  Copie da leggere sul telefono
+                  <small class="desc">
+                    Un file per nota nella cartella «Note da leggere», da aprire con l'app di Google Drive, OneDrive o Dropbox.
+                    Solo lettura; le note col PIN, archiviate o nel cestino non vengono copiate.
+                  </small>
+                </span>
+                <input type="checkbox" checked={syncStatus.phone_copy} onchange={(e) => setPhoneCopy(e.currentTarget.checked)} />
+              </label>
             </div>
           {/if}
 
@@ -679,6 +858,50 @@
             cronologia della nota. Il PIN impostato per ultimo vale su tutti i PC.
           </p>
         {/if}
+
+        <h4>Liste condivise con altre persone</h4>
+        <div class="group">
+          <p class="desc pad">
+            Una cartella di note (per esempio la spesa) che vedete e modificate in più persone. Si usa una cartella di Drive,
+            OneDrive o Dropbox condivisa con loro. Le note col PIN non vengono mai condivise.
+          </p>
+          {#each syncStatus.shares as share (share.folder_uid)}
+            <div class="row">
+              <span class="path">
+                <strong>👥 {share.name}</strong>
+                <small class="desc" title={share.dir}>{share.dir}</small>
+                {#if share.last_error}
+                  <small class="desc warn">{share.last_error}</small>
+                {:else}
+                  <small class="desc">
+                    {share.devices.filter((d) => !d.this_pc).length > 0
+                      ? `Con: ${share.devices.filter((d) => !d.this_pc).map((d) => d.name).join(", ")}`
+                      : "Nessun altro ancora collegato"}
+                  </small>
+                {/if}
+              </span>
+              <button class="plain" class:danger={confirmLeave === share.folder_uid} onclick={() => leaveShare(share.folder_uid)}>
+                {confirmLeave === share.folder_uid ? "Conferma" : "Smetti"}
+              </button>
+            </div>
+          {/each}
+          <div class="row">
+            <select bind:value={shareFolderId} aria-label="Cartella da condividere">
+              <option value={null}>Condividi una cartella…</option>
+              {#each folders.filter((f) => !syncStatus.shares.some((x) => x.name === f.name)) as f (f.id)}
+                <option value={f.id}>{f.name}</option>
+              {/each}
+            </select>
+            <div class="buttons">
+              <button class="plain" disabled={shareFolderId === null} onclick={shareFolder}>Scegli dove…</button>
+              <button class="plain" onclick={joinShare}>Unisciti…</button>
+            </div>
+          </div>
+        </div>
+        <p class="tip">
+          💡 Per condividere: scegli la cartella di note, poi una cartella di Drive vuota, e da Google Drive condividi quella cartella
+          con le altre persone. Loro, in Tabby, premono «Unisciti…» e scelgono la cartella che hanno ricevuto.
+        </p>
       {:else if tab === "backup"}
         <h4>Backup automatico</h4>
         <div class="group">
@@ -972,6 +1195,16 @@
     color: var(--muted);
     font-size: 12px;
     line-height: 1.4;
+  }
+  .passphrase {
+    flex: 1;
+    min-width: 0;
+    padding: 6px 10px;
+    border: 1px solid var(--line, rgba(0, 0, 0, 0.15));
+    border-radius: 6px;
+    background: transparent;
+    color: inherit;
+    font: inherit;
   }
   .desc.warn {
     color: var(--danger, #e55);

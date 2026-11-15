@@ -45,6 +45,13 @@ Nessun server: l'utente sceglie una cartella che il suo servizio cloud tiene gi�
 - Test automatici sull'unione delle modifiche (due PC, conflitti, eliminazioni, PC spento per giorni).
 - Prova vera su 3 PC con Google Drive.
 
+## Passo 2b — Novità della sincronizzazione ✅ (15/11/2026)
+- **Cifratura** (`crypto.rs`): frase segreta → chiave AES-256 (PBKDF2-SHA256, 210.000 iterazioni, sale nella cartella); file dei PC e allegati cifrati con AES-256-GCM, nomi degli allegati nascosti. La chiave resta in `settings.json` di ogni PC. Si può togliere.
+- **Copie per il telefono** (`phone.rs`): `Note da leggere/<cartella>/<titolo>.md`, solo note attive senza PIN; le scrive solo il PC che ha scritto per ultimo (niente doppioni di Drive); spente con la cifratura.
+- **Liste condivise** con altre persone: una cartella di note in una cartella cloud a parte (`tabby-sync.json` con `kind: share`); entra ed esce solo quella cartella, mai le note col PIN né il PIN.
+- **Cerca ovunque** (`Ctrl+Alt+F`): finestra `search`.
+Provati con `e2e.py` (tre "PC" finti: A, B e C di un'altra persona): 15 verifiche passate.
+
 ## Passo 3 — Microsoft Store (dopo)
 - Iscrizione sviluppatore gratuita con un account Microsoft personale.
 - Pacchetto **MSIX** (lo firma Microsoft gratis): passaggio con `makeappx` del Windows SDK dopo la build di Tauri, automatizzabile in `release.yml`.

@@ -1,10 +1,12 @@
 mod backup;
 mod capture;
+mod crypto;
 mod db;
 mod dock;
 mod export;
 mod media;
 mod organize;
+mod phone;
 mod pin;
 mod quiet;
 mod reminders;
@@ -750,7 +752,13 @@ pub fn run() {
             sync::sync_status,
             sync::sync_choose_folder,
             sync::sync_disconnect,
-            sync::sync_now
+            sync::sync_now,
+            sync::sync_set_passphrase,
+            sync::sync_remove_encryption,
+            sync::sync_set_phone_copy,
+            sync::share_folder,
+            sync::share_join,
+            sync::share_leave
         ])
         .on_window_event(|window, event| {
             // Chiudere "Tutte le note" la nasconde soltanto: riaprirla è istantaneo.

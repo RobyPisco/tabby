@@ -79,6 +79,19 @@ pub struct Settings {
     pub sync_dir: Option<String>,
     /// Identificativo di questo PC nella cartella condivisa (generato alla prima esecuzione).
     pub device_id: String,
+    /// Chiave (base64) ricavata dalla frase segreta della cartella condivisa, se è cifrata.
+    pub sync_key: Option<String>,
+    /// Cartelle di note condivise con altre persone, ognuna con la sua cartella cloud.
+    pub shares: Vec<ShareConfig>,
+}
+
+/// Una cartella di note condivisa con altre persone (vedi `sync.rs`).
+#[derive(Clone, Serialize, Deserialize, PartialEq, Debug)]
+pub struct ShareConfig {
+    /// `uid` della cartella di note.
+    pub folder_uid: String,
+    /// Cartella cloud condivisa con le altre persone.
+    pub dir: String,
 }
 
 impl Default for Settings {
@@ -112,6 +125,8 @@ impl Default for Settings {
             pin_changed_at: 0,
             sync_dir: None,
             device_id: String::new(),
+            sync_key: None,
+            shares: vec![],
         }
     }
 }
@@ -175,6 +190,8 @@ impl Settings {
             } else {
                 String::new()
             },
+            sync_key: self.sync_key.filter(|k| crate::crypto::decode_key(k).is_some()),
+            shares: self.shares,
         }
     }
 
@@ -188,6 +205,8 @@ impl Settings {
             last_update_notified: current.last_update_notified.clone(),
             sync_dir: current.sync_dir.clone(),
             device_id: current.device_id.clone(),
+            sync_key: current.sync_key.clone(),
+            shares: current.shares.clone(),
             ..self
         }
     }
@@ -298,10 +317,34 @@ impl SettingsState {
         self.set(settings.keeping_backend_fields_of(&current))
     }
 
-    /// Cartella di sincronizzazione scelta (o `None` per scollegare).
+    /// Cartella di sincronizzazione scelta (o `None` per scollegare). Cambiando cartella
+    /// la chiave della vecchia non serve più.
     pub fn set_sync_dir(&self, dir: Option<String>) -> Result<Settings, String> {
         let mut current = self.get();
+        if current.sync_dir != dir {
+            current.sync_key = None;
+        }
         current.sync_dir = dir;
+        self.set(current)
+    }
+
+    pub fn set_sync_key(&self, key: Option<String>) -> Result<Settings, String> {
+        let mut current = self.get();
+        current.sync_key = key;
+        self.set(current)
+    }
+
+    /// Aggiunge (o sostituisce) la condivisione di una cartella di note.
+    pub fn set_share(&self, share: ShareConfig) -> Result<Settings, String> {
+        let mut current = self.get();
+        current.shares.retain(|s| s.folder_uid != share.folder_uid);
+        current.shares.push(share);
+        self.set(current)
+    }
+
+    pub fn remove_share(&self, folder_uid: &str) -> Result<Settings, String> {
+        let mut current = self.get();
+        current.shares.retain(|s| s.folder_uid != folder_uid);
         self.set(current)
     }
 

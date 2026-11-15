@@ -51,6 +51,10 @@ export type Settings = {
   sync_dir: string | null;
   /** Identificativo di questo PC nella cartella condivisa. Sola lettura. */
   device_id: string;
+  /** Chiave ricavata dalla frase segreta della cartella condivisa. Sola lettura. */
+  sync_key: string | null;
+  /** Cartelle di note condivise con altre persone. Sola lettura. */
+  shares: { folder_uid: string; dir: string }[];
 };
 
 /** Vero se è già stato impostato un PIN globale per le note protette. */
@@ -94,6 +98,8 @@ export const settings = $state<Settings>({
   pin_changed_at: 0,
   sync_dir: null,
   device_id: "",
+  sync_key: null,
+  shares: [],
 });
 
 /** "09:00" → ore e minuti. */

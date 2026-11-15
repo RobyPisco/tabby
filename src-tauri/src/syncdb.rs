@@ -165,6 +165,23 @@ pub struct Snapshot {
     pub tombstones: Vec<Tombstone>,
 }
 
+impl Snapshot {
+    /// Solo la cartella `folder_uid` e le sue note (senza quelle protette da PIN): è quello
+    /// che si condivide con le altre persone di una lista condivisa. Le lapidi delle note
+    /// restano: sono solo identificativi casuali e servono a far sparire le note eliminate.
+    pub fn only_folder(self, folder_uid: &str) -> Snapshot {
+        Snapshot {
+            notes: self
+                .notes
+                .into_iter()
+                .filter(|n| n.folder.as_deref() == Some(folder_uid) && !n.locked)
+                .collect(),
+            folders: self.folders.into_iter().filter(|f| f.uid == folder_uid).collect(),
+            tombstones: self.tombstones.into_iter().filter(|t| t.kind == "note").collect(),
+        }
+    }
+}
+
 /// Come è andata l'applicazione delle modifiche di un altro PC.
 #[derive(Debug, Default, PartialEq)]
 pub struct Applied {
@@ -412,6 +429,34 @@ impl Db {
         Ok(applied)
     }
 
+    /// `uid` e nome della cartella di note con questo id.
+    pub fn folder_uid(&self, id: i64) -> rusqlite::Result<Option<(String, String)>> {
+        let conn = self.0.lock().unwrap();
+        conn.query_row("SELECT uid, name FROM folders WHERE id = ?1", [id], |r| Ok((r.get(0)?, r.get(1)?)))
+            .optional()
+    }
+
+    /// Nome attuale della cartella con questo `uid`, se esiste qui.
+    pub fn folder_name_by_uid(&self, uid: &str) -> rusqlite::Result<Option<String>> {
+        let conn = self.0.lock().unwrap();
+        conn.query_row("SELECT name FROM folders WHERE uid = ?1", [uid], |r| r.get(0)).optional()
+    }
+
+    /// Crea qui la cartella di una lista condivisa da un'altra persona, se non c'è già.
+    /// Se il nome è già usato da un'altra cartella, aggiunge "(condivisa)".
+    pub fn ensure_folder(&self, uid: &str, name: &str) -> rusqlite::Result<()> {
+        let conn = self.0.lock().unwrap();
+        let exists: bool = conn.query_row("SELECT EXISTS (SELECT 1 FROM folders WHERE uid = ?1)", [uid], |r| r.get(0))?;
+        if exists {
+            return Ok(());
+        }
+        let taken: bool = conn.query_row("SELECT EXISTS (SELECT 1 FROM folders WHERE name = ?1)", [name], |r| r.get(0))?;
+        let name = if taken { format!("{name} (condivisa)") } else { name.to_string() };
+        conn.execute("DELETE FROM sync_tombstones WHERE uid = ?1", [uid])?;
+        conn.execute("INSERT INTO folders (name, uid, changed_at) VALUES (?1, ?2, ?3)", params![name, uid, now_ms()])?;
+        Ok(())
+    }
+
     /// Dopo il ripristino di un backup le note ripristinate devono vincere su quelle degli altri PC.
     pub fn sync_touch_all(&self) -> rusqlite::Result<()> {
         let conn = self.0.lock().unwrap();
@@ -598,6 +643,32 @@ mod tests {
         assert!(titles(&b).contains(&"Ostinata".to_string()));
         send(&b, &a);
         assert!(titles(&a).contains(&"Ostinata".to_string()));
+    }
+
+    #[test]
+    fn a_shared_list_carries_only_its_folder() {
+        let (me, friend) = (db(), db());
+        let casa = me.create_folder("Casa").unwrap();
+        let spesa = me.create_full("Spesa sabato", "pane", "#fff").unwrap();
+        let segreta = me.create_full("Regalo", "sorpresa", "#fff").unwrap();
+        let privata = me.create_full("Diario", "solo mio", "#fff").unwrap();
+        me.set_folder(&[spesa.id, segreta.id], Some(casa)).unwrap();
+        me.set_locked(segreta.id, true).unwrap();
+        let (uid, name) = me.folder_uid(casa).unwrap().unwrap();
+        friend.ensure_folder(&uid, &name).unwrap();
+        friend.sync_apply(&me.sync_export().unwrap().only_folder(&uid), i64::MAX).unwrap();
+        let t = titles(&friend);
+        assert!(t.contains(&"Spesa sabato".to_string()));
+        assert!(!t.contains(&"Regalo".to_string()), "le note col PIN non si condividono");
+        assert!(!t.contains(&"Diario".to_string()), "le note fuori dalla cartella non si condividono");
+        let _ = privata;
+        // L'amico aggiunge una nota nella lista: arriva a me nella stessa cartella.
+        sleep();
+        let folder_friend = friend.list_folders().unwrap()[0].id;
+        let nuova = friend.create_full("Latte", "", "#fff").unwrap();
+        friend.set_folder(&[nuova.id], Some(folder_friend)).unwrap();
+        me.sync_apply(&friend.sync_export().unwrap().only_folder(&uid), i64::MAX).unwrap();
+        assert_eq!(by_title(&me, "Latte").folder_id, Some(casa));
     }
 
     #[test]

@@ -37,9 +37,17 @@ open    = "5"
 sha2    = "0.10"
 base64  = "0.22"
 rand    = "0.9"
+aes-gcm = "0.10"
+pbkdf2 = "0.12"
 
 
 # Read the optimization guideline for more details: https://tauri.app/concept/size/#cargo-configuration
+# La frase segreta (PBKDF2) sarebbe lentissima senza ottimizzazioni anche in sviluppo.
+[profile.dev.package.sha2]
+opt-level = 3
+[profile.dev.package.pbkdf2]
+opt-level = 3
+
 [profile.release]
 codegen-units = 1
 lto = true
