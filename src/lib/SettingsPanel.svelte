@@ -1,5 +1,5 @@
 <script module lang="ts">
-  let lastTab: "general" | "notes" | "reminders" | "backup" | "about" = "general";
+  let lastTab: "general" | "notes" | "reminders" | "sync" | "backup" | "about" = "general";
 </script>
 
 <script lang="ts">
@@ -16,6 +16,8 @@
   let { onclose }: { onclose: () => void } = $props();
 
   type MonitorInfo = { name: string; label: string };
+  type DeviceInfo = { name: string; seen_at: number; this_pc: boolean };
+  type SyncStatus = { dir: string | null; last_sync: number | null; last_error: string | null; devices: DeviceInfo[] };
 
   let monitors = $state<MonitorInfo[]>([]);
   let autostart = $state(false);
@@ -24,6 +26,9 @@
   let update_ = $state<Release | null>(null);
   let updateStatus = $state<"" | "checking" | "latest" | "failed">("");
   let dialog = $state<HTMLElement>();
+  // Sincronizzazione tra PC
+  let syncStatus = $state<SyncStatus>({ dir: null, last_sync: null, last_error: null, devices: [] });
+  let syncConfirmOff = $state(false);
   // Non disturbare: fine del silenzio in corso (manuale o fascia oraria).
   let quietUntil = $state<number | null>(null);
   // Backup
@@ -41,11 +46,12 @@
   let newPinConfirm = $state("");
   let confirmResetPin = $state(false);
 
-  type Tab = "general" | "notes" | "reminders" | "backup" | "about";
+  type Tab = "general" | "notes" | "reminders" | "sync" | "backup" | "about";
   const TABS: { id: Tab; icon: string; label: string; intro: string }[] = [
     { id: "general", icon: "⚙️", label: "Generale", intro: "Avvio, tema e posizione del deck." },
     { id: "notes", icon: "📝", label: "Note", intro: "Come appaiono le note." },
     { id: "reminders", icon: "🔔", label: "Promemoria", intro: "Notifiche, suoni e momenti di silenzio." },
+    { id: "sync", icon: "🔄", label: "Sincronizzazione", intro: "Le stesse note su tutti i tuoi PC, tramite Google Drive, OneDrive o Dropbox." },
     { id: "backup", icon: "💾", label: "Backup e dati", intro: "Copie di sicurezza delle note e dove sono salvate." },
     { id: "about", icon: "ℹ️", label: "Informazioni", intro: "Versione, aggiornamenti e scorciatoie." },
   ];
@@ -194,6 +200,41 @@
     }
   }
 
+  async function chooseSyncFolder() {
+    const dir = await openDialog({ directory: true, title: "Cartella condivisa (es. Il mio Drive, OneDrive o Dropbox)" });
+    if (typeof dir !== "string") return;
+    error = "";
+    try {
+      await invoke<string>("sync_choose_folder", { path: dir });
+      syncStatus = await invoke<SyncStatus>("sync_status");
+    } catch (e) {
+      error = `Sincronizzazione: ${e}`;
+    }
+  }
+
+  async function syncDisconnect() {
+    if (!syncConfirmOff) {
+      syncConfirmOff = true;
+      return;
+    }
+    syncConfirmOff = false;
+    try {
+      await invoke("sync_disconnect");
+    } catch (e) {
+      error = `Sincronizzazione: ${e}`;
+    }
+  }
+
+  /** "adesso", "5 min fa", "alle 18:20", "il 14/11". */
+  function ago(unix: number): string {
+    const secs = Math.floor(Date.now() / 1000) - unix;
+    if (secs < 60) return "adesso";
+    if (secs < 3600) return `${Math.floor(secs / 60)} min fa`;
+    const d = new Date(unix * 1000);
+    if (d.toDateString() === new Date().toDateString()) return `alle ${clock(unix)}`;
+    return `il ${d.toLocaleDateString("it-IT", { day: "numeric", month: "numeric" })}`;
+  }
+
   async function chooseBackupFolder() {
     const dir = await openDialog({ directory: true, title: "Cartella dei backup (es. su D: o in OneDrive)" });
     if (typeof dir === "string") {
@@ -237,10 +278,13 @@
     invoke<MonitorInfo[]>("list_monitors").then((list) => (monitors = list));
     invoke<boolean>("get_autostart").then((value) => (autostart = value));
     loadBackups();
+    invoke<SyncStatus>("sync_status").then((st) => (syncStatus = st));
     dialog?.focus();
     // Cambiato dal menu della tray mentre il pannello è aperto.
     const unlisten = listen("autostart-changed", async () => (autostart = await invoke<boolean>("get_autostart")));
+    const unlistenSync = listen<SyncStatus>("sync-status-changed", ({ payload }) => (syncStatus = payload));
     return () => {
+      unlistenSync.then((fn) => fn());
       unlisten.then((fn) => fn());
     };
   });
@@ -268,6 +312,7 @@
           <span class="tab-icon" aria-hidden="true">{t.icon}</span>
           {t.label}
           {#if t.id === "reminders" && quietUntil}<span class="tab-dot" title="Notifiche in pausa"></span>{/if}
+          {#if t.id === "sync" && settings.sync_dir && syncStatus.last_error}<span class="tab-dot warn" title="Problema di sincronizzazione"></span>{/if}
           {#if t.id === "about" && update_}<span class="tab-dot" title="Aggiornamento disponibile"></span>{/if}
         </button>
       {/each}
@@ -569,6 +614,70 @@
             </div>
           {/if}
         </div>
+      {:else if tab === "sync"}
+        {#if !settings.sync_dir}
+          <div class="group">
+            <p class="desc pad">
+              Scegli una cartella che il tuo servizio cloud tiene già sincronizzata, per esempio <strong>Il mio Drive</strong>
+              di Google Drive per desktop, OneDrive o Dropbox. Fai la stessa scelta sugli altri PC: Tabby crea lì dentro la
+              cartella «Tabby Sync» e unisce le note di tutti, senza perderne nessuna.
+            </p>
+            <div class="row">
+              <span>Non sincronizzato</span>
+              <button class="plain primary" onclick={chooseSyncFolder}>Scegli cartella…</button>
+            </div>
+          </div>
+          <p class="tip">
+            💡 Viaggiano note, cartelle, promemoria, colori, note fissate, cestino e PIN. Restano di ogni PC: posizione del deck,
+            suoni, scorciatoie, Non disturbare e backup.
+          </p>
+        {:else}
+          <div class="group">
+            <div class="row">
+              <span class="path">
+                <strong>{syncStatus.last_error ? "⚠ Sincronizzazione ferma" : "✓ Sincronizzato"}</strong>
+                <small class="desc" title={settings.sync_dir}>{settings.sync_dir}</small>
+                {#if syncStatus.last_error}
+                  <small class="desc warn">{syncStatus.last_error}</small>
+                {:else if syncStatus.last_sync}
+                  <small class="desc">Ultimo controllo {ago(syncStatus.last_sync)} · le modifiche arrivano in pochi secondi</small>
+                {/if}
+              </span>
+              <div class="buttons">
+                <button class="plain" onclick={() => invoke("sync_now")}>↻ Ora</button>
+                <button class="plain" onclick={chooseSyncFolder}>Cambia…</button>
+              </div>
+            </div>
+          </div>
+
+          {#if syncStatus.devices.length > 0}
+            <h4>PC collegati</h4>
+            <div class="group">
+              {#each syncStatus.devices as d (d.name + d.this_pc)}
+                <div class="row">
+                  <span>{d.name}{#if d.this_pc} <small class="value">(questo PC)</small>{/if}</span>
+                  <small class="value">ultima modifica {ago(d.seen_at)}</small>
+                </div>
+              {/each}
+            </div>
+          {/if}
+
+          <div class="group">
+            <div class="row">
+              <span>
+                Smetti di sincronizzare
+                <small class="desc">Le note restano su questo PC; la cartella condivisa e gli altri PC non vengono toccati.</small>
+              </span>
+              <button class="plain" class:danger={syncConfirmOff} onclick={syncDisconnect}>
+                {syncConfirmOff ? "Conferma" : "Scollega"}
+              </button>
+            </div>
+          </div>
+          <p class="tip">
+            💡 Se la stessa nota cambia su due PC mentre uno è spento, vince la modifica più recente e l'altra resta nella
+            cronologia della nota. Il PIN impostato per ultimo vale su tutti i PC.
+          </p>
+        {/if}
       {:else if tab === "backup"}
         <h4>Backup automatico</h4>
         <div class="group">
@@ -766,6 +875,10 @@
     background: var(--focus);
   }
 
+  .tab-dot.warn {
+    background: var(--danger, #e55);
+  }
+
   /* Contenuto della sezione */
   .content {
     flex: 1;
@@ -858,6 +971,9 @@
     color: var(--muted);
     font-size: 12px;
     line-height: 1.4;
+  }
+  .desc.warn {
+    color: var(--danger, #e55);
   }
   .desc.pad {
     margin: 0;

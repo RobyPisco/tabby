@@ -44,6 +44,13 @@ export type Settings = {
   forgotten_enabled: boolean;
   /** Dopo quanti giorni senza modifiche una nota è considerata dimenticata. */
   forgotten_days: number;
+  /** Quando è cambiato il PIN (ms): tra i PC sincronizzati vale il più recente. Sola lettura. */
+  pin_changed_at: number;
+  /** Cartella condivisa della sincronizzazione tra PC; `null` = non sincronizza.
+   *  Sola lettura: si cambia con `sync_choose_folder` / `sync_disconnect`. */
+  sync_dir: string | null;
+  /** Identificativo di questo PC nella cartella condivisa. Sola lettura. */
+  device_id: string;
 };
 
 /** Vero se è già stato impostato un PIN globale per le note protette. */
@@ -84,6 +91,9 @@ export const settings = $state<Settings>({
   last_update_notified: null,
   forgotten_enabled: true,
   forgotten_days: 30,
+  pin_changed_at: 0,
+  sync_dir: null,
+  device_id: "",
 });
 
 /** "09:00" → ore e minuti. */

@@ -173,6 +173,8 @@ pub fn restore(app: &AppHandle, name: &str) -> Result<(), String> {
     app.state::<Db>()
         .restore_from(&source.join("notes.db"))
         .map_err(|e| format!("ripristino del database non riuscito: {e}"))?;
+    // Con la sincronizzazione attiva le note ripristinate devono vincere su quelle degli altri PC.
+    app.state::<Db>().sync_touch_all().map_err(|e| e.to_string())?;
     app.state::<Scheduler>().wake();
     crate::notify_changed_from(app, "restore");
     Ok(())

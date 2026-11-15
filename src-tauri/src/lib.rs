@@ -9,6 +9,8 @@ mod pin;
 mod quiet;
 mod reminders;
 mod settings;
+mod sync;
+mod syncdb;
 mod timer;
 mod toast;
 mod tray;
@@ -473,7 +475,7 @@ fn get_settings(state: State<SettingsState>) -> Settings {
 /// Salva le impostazioni, riposiziona il deck e avvisa le finestre.
 #[tauri::command]
 fn set_settings(app: AppHandle, state: State<SettingsState>, settings: Settings) -> Result<Settings, String> {
-    let saved = state.set(settings)?;
+    let saved = state.set_from_ui(settings)?;
     if let Some(main) = app.get_webview_window("main") {
         dock::dock(&main, &saved).map_err(|e| e.to_string())?;
     }
@@ -711,7 +713,11 @@ pub fn run() {
             set_autostart,
             open_data_folder,
             delete_notes,
-            show_all_notes
+            show_all_notes,
+            sync::sync_status,
+            sync::sync_choose_folder,
+            sync::sync_disconnect,
+            sync::sync_now
         ])
         .on_window_event(|window, event| {
             // Chiudere "Tutte le note" la nasconde soltanto: riaprirla è istantaneo.
@@ -739,6 +745,9 @@ pub fn run() {
             app.manage(scheduler);
             app.manage(timer::setup(app.handle()));
             backup::start(app.handle());
+            // Sincronizzazione tra PC tramite la cartella condivisa (se scelta nelle impostazioni).
+            let sync_state = sync::start(app.handle());
+            app.manage(sync_state);
 
             let window = app
                 .get_webview_window("main")

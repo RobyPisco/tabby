@@ -29,6 +29,7 @@ L'installer non è ancora firmato: se Windows mostra "App non riconosciuta", sce
 - **Promemoria** con ricorrenza, notifiche di Windows con *10 min / 1 ora / Domani / Fatto / Altro*, date scritte a parole ("domani alle 9"); posticipo a un orario a scelta e ora di "Domani" configurabile.
 - **Non disturbare**: per 30 minuti, 1-2 ore, fino a domattina o in una fascia oraria fissa (es. 22-8); i promemoria arrivano tutti insieme alla fine.
 - **Timer / pomodoro** su una nota: 25 min di concentrazione, pausa, durata a scelta; il tempo rimasto appare sulla linguetta e alla fine arriva una notifica con "Pausa" / "Altri 25 min".
+- **Sincronizzazione tra PC** (facoltativa): scegli la stessa cartella di Google Drive, OneDrive o Dropbox su ogni PC e Tabby tiene le stesse note ovunque, senza server né account. Se una nota cambia su due PC, vince la modifica più recente e l'altra resta nella cronologia.
 - **Backup automatico** giornaliero di note, immagini e impostazioni in una cartella a scelta (meglio su un altro disco o in OneDrive), con ripristino dalle impostazioni.
 - **Cattura rapida** degli appunti, **export** (Markdown/testo, un file per nota o file unico) e **import**.
 - **Impostazioni**: bordo, larghezza, schermo, carattere, colore delle note nuove, suono, tema, avvio con Windows.

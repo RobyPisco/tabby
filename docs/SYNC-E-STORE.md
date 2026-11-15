@@ -9,7 +9,12 @@ Obiettivo: installo Tabby su 3 PC e tutti e tre vedono le stesse note. Poi pubbl
 Fatto il 15/11/2026: codice (`gcal.rs`, `http.rs`, `CalendarTile.svelte`), comandi, impostazioni, interfaccia, secret del workflow e parte dell'informativa sulla privacy.
 All'apertura di un database vecchio le note importate dal calendario (copie degli eventi) vengono eliminate, insieme alla cartella «Calendario Google» se resta vuota (`db::remove_google_calendar`). Le vecchie chiavi `gcal_*` di `settings.json` vengono ignorate.
 
-## Passo 2 — Sincronizzazione tramite una cartella a scelta
+## Passo 2 — Sincronizzazione tramite una cartella a scelta ✅
+
+Fatto il 15/11/2026: `syncdb.rs` (uid, `changed_at`, lapidi, unione delle note, 10 test), `sync.rs` (cartella condivisa, file per PC, immagini, PIN comune, 2 test), sezione «Sincronizzazione» nelle impostazioni. Provato con due copie dell'app e una cartella condivisa finta: note nuove e modifiche passano nei due sensi, le note di benvenuto non si duplicano.
+**Attenzione:** le note protette da PIN nella cartella condivisa sono leggibili come nel database locale (il PIN le nasconde solo sullo schermo, ADR-0001). Il PIN vale su tutti i PC: vince quello impostato per ultimo.
+Da provare a mano: 3 PC veri con Google Drive, immagini e allegati, PC spento per giorni.
+
 
 Nessun server: l'utente sceglie una cartella che il suo servizio cloud tiene già sincronizzata. **Funziona con qualsiasi servizio**: Google Drive per desktop (es. `G:\Il mio Drive\Tabby`), OneDrive, Dropbox, una cartella di rete o una chiavetta.
 

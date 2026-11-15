@@ -73,6 +73,12 @@ pub struct Settings {
     pub forgotten_enabled: bool,
     /// Dopo quanti giorni senza modifiche una nota è considerata dimenticata.
     pub forgotten_days: u32,
+    /// Quando è cambiato il PIN (millisecondi Unix): tra i PC sincronizzati vale il più recente.
+    pub pin_changed_at: i64,
+    /// Cartella condivisa della sincronizzazione tra PC; `None` = non sincronizza.
+    pub sync_dir: Option<String>,
+    /// Identificativo di questo PC nella cartella condivisa (generato alla prima esecuzione).
+    pub device_id: String,
 }
 
 impl Default for Settings {
@@ -103,6 +109,9 @@ impl Default for Settings {
             last_update_notified: None,
             forgotten_enabled: true,
             forgotten_days: 30,
+            pin_changed_at: 0,
+            sync_dir: None,
+            device_id: String::new(),
         }
     }
 }
@@ -159,6 +168,27 @@ impl Settings {
             last_update_notified: self.last_update_notified,
             forgotten_enabled: self.forgotten_enabled,
             forgotten_days: self.forgotten_days.clamp(FORGOTTEN_DAYS_RANGE.0, FORGOTTEN_DAYS_RANGE.1),
+            pin_changed_at: self.pin_changed_at.max(0),
+            sync_dir: self.sync_dir.filter(|d| !d.trim().is_empty()),
+            device_id: if self.device_id.len() >= 8 && self.device_id.chars().all(|c| c.is_ascii_alphanumeric()) {
+                self.device_id
+            } else {
+                String::new()
+            },
+        }
+    }
+
+    /// Le impostazioni arrivate dall'interfaccia non possono toccare i campi gestiti
+    /// dal backend (PIN, sincronizzazione, aggiornamenti): restano quelli attuali.
+    pub fn keeping_backend_fields_of(self, current: &Settings) -> Settings {
+        Settings {
+            pin_hash: current.pin_hash.clone(),
+            pin_salt: current.pin_salt.clone(),
+            pin_changed_at: current.pin_changed_at,
+            last_update_notified: current.last_update_notified.clone(),
+            sync_dir: current.sync_dir.clone(),
+            device_id: current.device_id.clone(),
+            ..self
         }
     }
 
@@ -192,6 +222,7 @@ impl Settings {
         let (hash, salt) = crate::pin::hash(pin);
         self.pin_hash = Some(hash);
         self.pin_salt = Some(salt);
+        self.pin_changed_at = crate::syncdb::now_ms();
         Ok(())
     }
 
@@ -212,6 +243,7 @@ impl Settings {
         let (hash, salt) = crate::pin::hash(new_pin);
         self.pin_hash = Some(hash);
         self.pin_salt = Some(salt);
+        self.pin_changed_at = crate::syncdb::now_ms();
         Ok(())
     }
 
@@ -219,6 +251,7 @@ impl Settings {
     pub fn clear_pin(&mut self) {
         self.pin_hash = None;
         self.pin_salt = None;
+        self.pin_changed_at = crate::syncdb::now_ms();
     }
 
     /// Vero se è già stata mostrata la notifica di aggiornamento per questa versione.
@@ -244,10 +277,44 @@ impl SettingsState {
             .and_then(|text| parse(&text))
             .unwrap_or_default()
             .sanitized();
-        SettingsState {
+        let state = SettingsState {
             path,
             value: Mutex::new(value),
+        };
+        if state.get().device_id.is_empty() {
+            let mut current = state.get();
+            current.device_id = new_device_id();
+            if let Err(e) = state.set(current.clone()) {
+                eprintln!("impostazioni non salvate: {e}");
+                *state.value.lock().unwrap() = current;
+            }
         }
+        state
+    }
+
+    /// Salva le impostazioni cambiate dall'interfaccia (vedi `keeping_backend_fields_of`).
+    pub fn set_from_ui(&self, settings: Settings) -> Result<Settings, String> {
+        let current = self.get();
+        self.set(settings.keeping_backend_fields_of(&current))
+    }
+
+    /// Cartella di sincronizzazione scelta (o `None` per scollegare).
+    pub fn set_sync_dir(&self, dir: Option<String>) -> Result<Settings, String> {
+        let mut current = self.get();
+        current.sync_dir = dir;
+        self.set(current)
+    }
+
+    /// PIN arrivato da un altro PC: vale se è più recente di quello di qui.
+    pub fn apply_remote_pin(&self, hash: Option<String>, salt: Option<String>, changed_at: i64) -> Result<Option<Settings>, String> {
+        let mut current = self.get();
+        if changed_at <= current.pin_changed_at {
+            return Ok(None);
+        }
+        current.pin_hash = hash;
+        current.pin_salt = salt;
+        current.pin_changed_at = changed_at;
+        self.set(current).map(Some)
     }
 
     pub fn get(&self) -> Settings {
@@ -289,6 +356,14 @@ impl SettingsState {
         current.mark_update_notified(version);
         self.set(current)
     }
+}
+
+/// Identificativo casuale di questo PC (32 cifre esadecimali).
+fn new_device_id() -> String {
+    use rand::RngCore;
+    let mut raw = [0u8; 16];
+    rand::rng().fill_bytes(&mut raw);
+    raw.iter().map(|b| format!("{b:02x}")).collect()
 }
 
 /// Legge `settings.json`. Le vecchie chiavi di Google Calendar (`gcal_*`) vengono ignorate.

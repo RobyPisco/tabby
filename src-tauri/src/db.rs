@@ -181,8 +181,16 @@ fn migrate(conn: &Connection) -> rusqlite::Result<()> {
              DELETE FROM reminders WHERE note_id = old.id;
          END;",
     )?;
+    crate::syncdb::migrate(conn)?;
     Ok(())
 }
+
+/// Note di benvenuto della prima esecuzione. Hanno lo stesso `uid` su tutti i PC,
+/// così quando si collega la sincronizzazione non compaiono doppie.
+pub(crate) const SEED: [(&str, &str, &str, &str); 2] = [
+    ("seed-benvenuto", "Benvenuto", "- avvicina il mouse al bordo destro\n- clicca una linguetta per aprirla\n- scrivi: si salva da sola", "#b5d3f7"),
+    ("seed-spesa", "Spesa", "- mele\n- banane\n- caffè", "#b3e5cf"),
+];
 
 /// Google Calendar non c'è più: le note importate dal calendario erano solo copie degli
 /// eventi, quindi si eliminano, insieme alla cartella "Calendario Google" se resta vuota.
@@ -302,14 +310,12 @@ impl Db {
             return Ok(());
         }
         let t = now();
-        let seed = [
-            ("Benvenuto", "- avvicina il mouse al bordo destro\n- clicca una linguetta per aprirla\n- scrivi: si salva da sola", "#b5d3f7"),
-            ("Spesa", "- mele\n- banane\n- caffè", "#b3e5cf"),
-        ];
-        for (title, body, color) in seed {
+        for (uid, title, body, color) in SEED {
+            // changed_at = 1: qualsiasi modifica vera, su qualsiasi PC, vince sulla nota di benvenuto.
             conn.execute(
-                "INSERT INTO notes (title, body, color, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?4)",
-                params![title, body, color, t],
+                "INSERT INTO notes (uid, title, body, color, created_at, updated_at, changed_at)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?5, 1)",
+                params![uid, title, body, color, t],
             )?;
         }
         Ok(())
