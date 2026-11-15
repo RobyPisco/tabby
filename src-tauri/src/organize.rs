@@ -40,7 +40,7 @@ pub struct NoteRef {
 
 /// Titolo oscurato con lo stesso placeholder di `db::redact_if_locked` se la nota è protetta.
 fn note_ref(id: i64, title: String, locked: bool) -> NoteRef {
-    NoteRef { id, title: if locked { crate::pin::PLACEHOLDER.to_string() } else { title } }
+    NoteRef { id, title: if locked { crate::pin::placeholder().to_string() } else { title } }
 }
 
 #[derive(Serialize)]

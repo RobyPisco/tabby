@@ -8,6 +8,12 @@ use sha2::{Digest, Sha256};
 
 /// Testo al posto di titolo di una nota protetta non ancora sbloccata in questa apertura.
 pub const PLACEHOLDER: &str = "🔒 Nota protetta";
+pub const PLACEHOLDER_EN: &str = "🔒 Protected note";
+
+/// Il segnaposto delle note protette nella lingua scelta.
+pub fn placeholder() -> &'static str {
+    crate::i18n::tr(PLACEHOLDER, PLACEHOLDER_EN)
+}
 
 /// Vero se `pin` è una sequenza di 4-6 cifre.
 pub fn is_valid(pin: &str) -> bool {

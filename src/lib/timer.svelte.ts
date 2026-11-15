@@ -35,8 +35,17 @@ function assign(timers: Timer[]) {
 
 /** Da chiamare all'avvio di ogni finestra che mostra i timer. */
 export async function initTimer(): Promise<() => void> {
-  assign(await invoke<Timer[]>("timer_get"));
-  return listen<Timer[]>("timer-changed", ({ payload }) => assign(payload));
+  const unlisten = await listen<Timer[]>("timer-changed", ({ payload }) => assign(payload));
+  // All'avvio la finestra può essere pronta prima del backend: si riprova per qualche secondo.
+  for (let attempt = 0; attempt < 40; attempt++) {
+    try {
+      assign(await invoke<Timer[]>("timer_get"));
+      break;
+    } catch {
+      await new Promise((ok) => setTimeout(ok, 250));
+    }
+  }
+  return unlisten;
 }
 
 /** "4:05", oppure "1:02:30" oltre l'ora. */

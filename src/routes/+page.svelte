@@ -200,8 +200,15 @@
     setPhase("rest");
   }
 
-  async function reload() {
-    notes = await invoke<Note[]>("list_notes");
+  async function reload(attempt = 0) {
+    try {
+      notes = await invoke<Note[]>("list_notes");
+    } catch (e) {
+      // All'avvio la finestra può essere pronta prima del database: si riprova per qualche secondo.
+      if (attempt < 40) setTimeout(() => reload(attempt + 1), 250);
+      else console.error("note non caricate", e);
+      return;
+    }
     // La nota aperta è stata archiviata o eliminata dalla finestra "Tutte le note".
     if (openId !== null && !notes.some((n) => n.id === openId)) {
       openId = null;
@@ -239,7 +246,7 @@
     const timerReady = initTimer();
     dailyChecks();
     const dailyCheckTimer = setInterval(dailyChecks, DAILY_CHECK_INTERVAL_MS);
-    const unlistenChanges = onNotesChangedElsewhere(reload);
+    const unlistenChanges = onNotesChangedElsewhere(() => reload());
     // Ctrl+Alt+N / Ctrl+Alt+P o menu della tray; il payload dice se aprire subito il promemoria.
     const unlistenNewNote = listen<boolean>("new-note", ({ payload }) => addNote(payload));
     // Clic su una notifica di promemoria.

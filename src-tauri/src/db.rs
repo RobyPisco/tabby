@@ -104,7 +104,7 @@ pub(crate) fn redact_if_locked(note: Note) -> Note {
         return note;
     }
     Note {
-        title: crate::pin::PLACEHOLDER.to_string(),
+        title: crate::pin::placeholder().to_string(),
         body: String::new(),
         ..note
     }

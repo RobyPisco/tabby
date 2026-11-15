@@ -135,8 +135,16 @@ function assign(next: Settings) {
 
 /** Da chiamare all'avvio di ogni finestra. */
 export async function initSettings(): Promise<() => void> {
-  assign(await invoke<Settings>("get_settings"));
   const unlisten = await listen<Settings>("settings-changed", ({ payload }) => assign(payload));
+  // All'avvio la finestra può essere pronta prima del backend: si riprova per qualche secondo.
+  for (let attempt = 0; attempt < 40; attempt++) {
+    try {
+      assign(await invoke<Settings>("get_settings"));
+      break;
+    } catch {
+      await new Promise((ok) => setTimeout(ok, 250));
+    }
+  }
   return unlisten;
 }
 

@@ -261,7 +261,7 @@ fn check_forgotten_notes(
         // Nota protetta: niente di titolo/corpo deve finire in una notifica di sistema
         // (stessa regola di reminders.rs::show_toast).
         let t = if note.locked {
-            pin::PLACEHOLDER
+            pin::placeholder()
         } else {
             let t = note.title.trim();
             if t.is_empty() { crate::i18n::tr("Senza titolo", "Untitled") } else { t }
