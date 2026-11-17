@@ -540,8 +540,9 @@
         <label class="check">
           <input type="checkbox" checked={allChecked} onchange={toggleAll} />
         </label>
-        <span>{plural(checked.length, ["selezionata", "selezionate"], ["selected", "selected"])}</span>
+        <span class="count">{plural(checked.length, ["selezionata", "selezionate"], ["selected", "selected"])}</span>
         <span class="spacer"></span>
+        <div class="actions">
         {#if inTrash}
           <button onclick={restoreFromTrash}>{tr("Ripristina", "Restore")}</button>
           <button class="danger" class:confirm={confirmDelete} onclick={deleteTargets}>
@@ -581,6 +582,7 @@
           <button onclick={() => setArchived(false)}>{tr("Ripristina", "Restore")}</button>
           <button class="danger" onclick={deleteTargets}>{tr("Elimina", "Delete")}</button>
         {/if}
+        </div>
       </div>
     {/if}
 
@@ -886,6 +888,8 @@
     display: flex;
     flex-direction: column;
     min-height: 0;
+    min-width: 0;
+    overflow: hidden;
     background: var(--pane);
     border-right: 1px solid var(--line);
   }
@@ -966,6 +970,7 @@
 
   .bulk {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     gap: 6px;
     padding: 6px 14px 6px 4px;
@@ -975,6 +980,18 @@
   }
   .bulk .spacer {
     flex: 1;
+  }
+  .bulk .count {
+    white-space: nowrap;
+  }
+  /* Le azioni vanno a capo invece di finire sotto l'editor. */
+  .bulk .actions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 6px;
+    width: 100%;
+    padding-left: 28px;
   }
   .bulk button {
     border: 1px solid var(--line);
